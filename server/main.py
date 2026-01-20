@@ -10,6 +10,9 @@ from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 
 from .routes.simulation import router as simulation_router
+from .routes.templates import router as templates_router
+from .routes.tools import router as tools_router
+from .routes.batch import router as batch_router
 
 # Load environment variables
 load_dotenv()
@@ -53,6 +56,9 @@ app.add_middleware(
 
 # API routes
 app.include_router(simulation_router, prefix="/api")
+app.include_router(templates_router, prefix="/api")
+app.include_router(tools_router, prefix="/api")
+app.include_router(batch_router, prefix="/api")
 
 
 # Serve static files if client build exists

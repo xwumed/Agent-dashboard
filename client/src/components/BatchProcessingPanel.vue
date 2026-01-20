@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import {
   ChevronDown,
   ChevronRight,
@@ -10,14 +10,15 @@ import {
   CheckCircle,
   XCircle,
   Loader2,
-  FolderOpen
+  FolderOpen,
+  Star
 } from 'lucide-vue-next'
 import { useBatchProcessing } from '../composables/useBatchProcessing'
 import { useTopology } from '../composables/useTopology'
 import { scenarios } from '../scenarios'
 import type { ScenarioCategory } from '../types'
 
-const { apiKey, apiEndpoint } = useTopology()
+const { apiKey, apiEndpoint, globalModel, globalTemperature, globalBehaviorPreset } = useTopology()
 const {
   uploadedScenarios,
   batchRuns,
@@ -35,15 +36,49 @@ const {
   runBatch,
   cancelBatch,
   downloadResults,
-  clearBatch
+  clearBatch,
+  loadCustomTemplatesForBatch
 } = useBatchProcessing()
 
 const isExpanded = ref(false)
-const expandedCategories = ref<Set<ScenarioCategory>>(new Set())
+const expandedCategories = ref<Set<ScenarioCategory | 'my-templates'>>(new Set())
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const error = ref<string | null>(null)
 
-const categoryLabels: Record<ScenarioCategory, string> = {
+// Load custom templates when panel expands
+watch(() => isExpanded.value, (expanded) => {
+  if (expanded) {
+    loadCustomTemplates()
+    loadCustomTemplatesForBatch()
+  }
+})
+
+// Custom templates from API
+interface TemplateMetadata {
+  id: string
+  name: string
+  description?: string
+}
+const customTemplates = ref<TemplateMetadata[]>([])
+
+async function loadCustomTemplates() {
+  try {
+    const response = await fetch('/api/templates')
+    if (response.ok) {
+      customTemplates.value = await response.json()
+    }
+  } catch (err) {
+    console.error('Failed to load templates:', err)
+  }
+}
+
+onMounted(loadCustomTemplates)
+watch(() => isExpanded.value, (expanded) => {
+  if (expanded) loadCustomTemplates()
+})
+
+const categoryLabels: Record<ScenarioCategory | 'my-templates', string> = {
+  'my-templates': 'My Templates',
   'regulatory': 'Regulatory',
   'strategy': 'Strategy',
   'clinical': 'Clinical Dev',
@@ -52,7 +87,8 @@ const categoryLabels: Record<ScenarioCategory, string> = {
   'documentation': 'Documentation'
 }
 
-const categoryOrder: ScenarioCategory[] = [
+const categoryOrder: (ScenarioCategory | 'my-templates')[] = [
+  'my-templates',
   'clinical-decisions',
   'clinical',
   'regulatory',
@@ -78,15 +114,16 @@ const groupedScenarios = computed(() => {
   })
 
   return categoryOrder
-    .filter(cat => groups[cat].length > 0)
+    .filter(cat => cat === 'my-templates' ? customTemplates.value.length > 0 : groups[cat as ScenarioCategory]?.length > 0)
     .map(cat => ({
       category: cat,
       label: categoryLabels[cat],
-      scenarios: groups[cat]
+      scenarios: cat === 'my-templates' ? [] : groups[cat as ScenarioCategory],
+      isCustom: cat === 'my-templates'
     }))
 })
 
-function toggleCategory(category: ScenarioCategory) {
+function toggleCategory(category: ScenarioCategory | 'my-templates') {
   if (expandedCategories.value.has(category)) {
     expandedCategories.value.delete(category)
   } else {
@@ -115,7 +152,13 @@ async function handleRunBatch() {
     return
   }
 
-  await runBatch(apiKey.value, apiEndpoint.value)
+  await runBatch(
+    apiKey.value,
+    apiEndpoint.value,
+    globalModel.value,
+    globalTemperature.value,
+    globalBehaviorPreset.value
+  )
 }
 
 function getRunStatus(scenarioId: string) {
@@ -170,15 +213,40 @@ function getRunStatus(scenarioId: string) {
             @click="toggleCategory(group.category)"
             class="w-full px-2 py-1.5 flex items-center gap-1 bg-gray-50 hover:bg-gray-100 text-left border-b border-gray-100"
           >
+            <Star v-if="group.isCustom" class="w-3 h-3 text-amber-500 flex-shrink-0" />
             <ChevronRight
+              v-else
               class="w-3 h-3 text-gray-400 transition-transform flex-shrink-0"
               :class="expandedCategories.has(group.category) ? 'rotate-90' : ''"
             />
             <span class="text-[10px] font-medium text-gray-600 truncate">{{ group.label }}</span>
-            <span class="text-[9px] text-gray-400 ml-auto">{{ group.scenarios.length }}</span>
+            <span class="text-[9px] text-gray-400 ml-auto">
+              {{ group.isCustom ? customTemplates.length : group.scenarios.length }}
+            </span>
           </button>
 
-          <div v-if="expandedCategories.has(group.category)">
+          <!-- Custom Templates (My Templates) -->
+          <div v-if="group.isCustom && expandedCategories.has(group.category)">
+            <label
+              v-for="template in customTemplates"
+              :key="'custom-' + template.id"
+              class="flex items-center gap-2 px-2 py-1.5 pl-5 hover:bg-amber-50 cursor-pointer border-b border-gray-50"
+            >
+              <input
+                type="checkbox"
+                :checked="isSelected('custom:' + template.id)"
+                @change="toggleScenario('custom:' + template.id)"
+                class="w-3 h-3 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+              />
+              <span class="text-[10px] text-gray-700 truncate flex-1">{{ template.name }}</span>
+            </label>
+            <div v-if="customTemplates.length === 0" class="px-5 py-2 text-[9px] text-gray-400 italic">
+              No saved templates
+            </div>
+          </div>
+
+          <!-- Preset Scenarios -->
+          <div v-else-if="!group.isCustom && expandedCategories.has(group.category)">
             <label
               v-for="scenario in group.scenarios"
               :key="scenario.id"
@@ -227,26 +295,28 @@ function getRunStatus(scenarioId: string) {
       </div>
 
       <!-- Selection controls -->
-      <div class="flex items-center gap-1">
+      <div class="flex items-center gap-2 py-1">
         <button
           @click="selectAll"
-          class="text-[10px] text-primary-600 hover:text-primary-700 px-1.5 py-0.5"
+          class="flex items-center justify-center w-7 h-7 text-primary-600 hover:text-primary-700 hover:bg-primary-50 rounded-md transition-colors"
+          title="Select All"
         >
-          All
+          <CheckCircle class="w-4 h-4" />
         </button>
-        <span class="text-gray-300">|</span>
         <button
           @click="clearSelection"
-          class="text-[10px] text-gray-500 hover:text-gray-700 px-1.5 py-0.5"
+          class="flex items-center justify-center w-7 h-7 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
+          title="Clear Selection"
         >
-          None
+          <XCircle class="w-4 h-4" />
         </button>
         <div class="flex-1" />
         <button
           @click="fileInputRef?.click()"
-          class="text-[10px] text-gray-500 hover:text-gray-700 flex items-center gap-1"
+          class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md transition-colors"
+          title="Upload JSON files"
         >
-          <FolderOpen class="w-3 h-3" />
+          <FolderOpen class="w-3.5 h-3.5" />
           Upload
         </button>
         <input

@@ -1,9 +1,31 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ChevronDown, ChevronUp, Trash2, HelpCircle, BookOpen, Wrench, Lock, Copy, Check, Clock, Zap, AlertCircle, Edit3 } from 'lucide-vue-next'
 import { useTopology } from '../composables/useTopology'
 import { buildPrompt } from '../utils/promptBuilder'
-import type { BehaviorPreset, ModelType, SuspicionLevel, RogueProfile } from '../types'
+import type { BehaviorPreset, ModelType, SuspicionLevel, RogueProfile, AgentTool } from '../types'
+
+// Available tools from backend
+interface ToolDef {
+  id: string
+  name: string
+  description: string
+  category: string
+}
+const availableTools = ref<ToolDef[]>([])
+
+async function loadTools() {
+  try {
+    const response = await fetch('/api/tools')
+    if (response.ok) {
+      availableTools.value = await response.json()
+    }
+  } catch (err) {
+    console.error('Failed to load tools:', err)
+  }
+}
+
+onMounted(loadTools)
 
 // Educational tooltip content for pharma R&D context
 const tooltips = {
@@ -23,7 +45,8 @@ const {
   removeNode,
   edges,
   simulationResults,
-  getOutputNodeResult
+  getOutputNodeResult,
+  globalModel
 } = useTopology()
 
 // Check if selected node has simulation results (for agent nodes)
@@ -97,9 +120,16 @@ const behaviorPresets: { value: BehaviorPreset; label: string }[] = [
 ]
 
 const models: { value: ModelType; label: string }[] = [
+  // OpenAI models
+  { value: 'gpt-5.2', label: 'GPT-5.2 (OpenAI)' },
+  { value: 'gpt-4o', label: 'GPT-4o (OpenAI)' },
+  // Local models from config.toml
+  { value: 'Llama-4-Maverick-17B-128E-Instruct-FP8', label: 'Llama-4 Maverick (Local)' },
+  { value: 'GPT-OSS-120B', label: 'GPT-OSS-120B (Local)' },
+  { value: 'GLM-4.7-FP8', label: 'GLM-4.7 (Local)' },
+  // Legacy
   { value: 'gpt-5-nano', label: 'GPT-5 Nano' },
-  { value: 'gpt-5-mini', label: 'GPT-5 Mini' },
-  { value: 'gpt-5.2', label: 'GPT-5.2' }
+  { value: 'gpt-5-mini', label: 'GPT-5 Mini' }
 ]
 
 const suspicionLevels: { value: SuspicionLevel; label: string }[] = [
@@ -150,6 +180,22 @@ function deleteNode() {
   if (selectedAgent.value) {
     removeNode(selectedAgent.value.id)
   }
+}
+
+function toggleTool(tool: ToolDef) {
+  if (!selectedAgent.value) return
+  
+  const currentTools = selectedAgent.value.tools || []
+  const exists = currentTools.some((t: AgentTool) => t.id === tool.id)
+  
+  let newTools: AgentTool[]
+  if (exists) {
+    newTools = currentTools.filter((t: AgentTool) => t.id !== tool.id)
+  } else {
+    newTools = [...currentTools, { id: tool.id, name: tool.name, description: tool.description }]
+  }
+  
+  updateNode(selectedAgent.value.id, { tools: newTools })
 }
 </script>
 
@@ -270,9 +316,9 @@ function deleteNode() {
         </div>
       </div>
 
-      <!-- Model info -->
+      <!-- Model info (shows global model) -->
       <div class="text-xs text-gray-500">
-        Model: <span class="font-medium text-gray-700">{{ nodeResult?.model || selectedAgent?.model }}</span>
+        Model: <span class="font-medium text-gray-700">{{ nodeResult?.model || globalModel }}</span>
       </div>
 
       <!-- Error display -->
@@ -329,76 +375,6 @@ function deleteNode() {
           class="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-primary-600 focus:border-primary-600 focus:bg-white resize-none transition-colors"
           placeholder="Describe what this agent does..."
         />
-      </div>
-
-      <!-- Behavior Preset -->
-      <div>
-        <label class="flex items-center gap-1 text-xs font-medium text-gray-500 mb-1.5">
-          Behavior Preset
-          <span class="group relative">
-            <HelpCircle class="w-3 h-3 text-gray-300 hover:text-primary-500 cursor-help" />
-            <span class="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-56 p-2 bg-gray-900 text-white text-xs rounded-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity z-50 shadow-lg">
-              {{ tooltips.behaviorPreset }}
-            </span>
-          </span>
-        </label>
-        <select
-          :value="selectedAgent!.behaviorPreset"
-          @change="updateField('behaviorPreset', ($event.target as HTMLSelectElement).value as BehaviorPreset)"
-          class="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-primary-600 focus:border-primary-600 focus:bg-white transition-colors"
-        >
-          <option v-for="preset in behaviorPresets" :key="preset.value" :value="preset.value">
-            {{ preset.label }}
-          </option>
-        </select>
-      </div>
-
-      <!-- Model -->
-      <div>
-        <label class="flex items-center gap-1 text-xs font-medium text-gray-500 mb-1.5">
-          Model
-          <span class="group relative">
-            <HelpCircle class="w-3 h-3 text-gray-300 hover:text-primary-500 cursor-help" />
-            <span class="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-56 p-2 bg-gray-900 text-white text-xs rounded-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity z-50 shadow-lg">
-              {{ tooltips.model }}
-            </span>
-          </span>
-        </label>
-        <select
-          :value="selectedAgent!.model"
-          @change="updateField('model', ($event.target as HTMLSelectElement).value as ModelType)"
-          class="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-primary-600 focus:border-primary-600 focus:bg-white transition-colors"
-        >
-          <option v-for="model in models" :key="model.value" :value="model.value">
-            {{ model.label }}
-          </option>
-        </select>
-      </div>
-
-      <!-- Temperature -->
-      <div>
-        <label class="flex items-center gap-1 text-xs font-medium text-gray-500 mb-1.5">
-          Temperature: {{ selectedAgent!.temperature.toFixed(1) }}
-          <span class="group relative">
-            <HelpCircle class="w-3 h-3 text-gray-300 hover:text-primary-500 cursor-help" />
-            <span class="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-56 p-2 bg-gray-900 text-white text-xs rounded-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity z-50 shadow-lg">
-              {{ tooltips.temperature }}
-            </span>
-          </span>
-        </label>
-        <input
-          type="range"
-          :value="selectedAgent!.temperature"
-          @input="updateField('temperature', parseFloat(($event.target as HTMLInputElement).value))"
-          min="0"
-          max="2"
-          step="0.1"
-          class="w-full accent-primary-600"
-        />
-        <div class="flex justify-between text-xs text-gray-400 mt-1">
-          <span>Precise</span>
-          <span>Creative</span>
-        </div>
       </div>
 
       <!-- Oversight toggle -->
@@ -475,12 +451,12 @@ function deleteNode() {
         </div>
       </div>
 
-      <!-- Tools (Coming Soon) -->
+      <!-- Tools -->
       <div class="border-t border-gray-100 pt-4">
         <div class="flex items-center justify-between mb-2">
           <div class="flex items-center gap-1">
-            <Wrench class="w-3.5 h-3.5 text-gray-300" />
-            <span class="text-xs font-medium text-gray-400">Tools</span>
+            <Wrench class="w-3.5 h-3.5 text-primary-600" />
+            <span class="text-xs font-medium text-gray-700">Tools</span>
             <span class="group relative">
               <HelpCircle class="w-3 h-3 text-gray-300 hover:text-gray-400 cursor-help" />
               <span class="absolute left-0 bottom-full mb-2 w-56 p-2 bg-gray-900 text-white text-xs rounded-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity z-50 shadow-lg">
@@ -488,17 +464,30 @@ function deleteNode() {
               </span>
             </span>
           </div>
-          <span class="px-1.5 py-0.5 text-[9px] font-medium text-gray-400 bg-gray-100 rounded">COMING SOON</span>
+          <span class="text-xs text-gray-400">{{ (selectedAgent?.tools || []).length }} selected</span>
         </div>
-        <div class="bg-gray-50 border border-dashed border-gray-200 rounded-md p-3 opacity-60">
-          <div class="flex items-center justify-center gap-2 text-gray-400">
-            <Lock class="w-3.5 h-3.5" />
-            <span class="text-xs">Connect MCP tools</span>
-          </div>
-          <p class="text-[10px] text-gray-400 text-center mt-2">
-            PubMed, ClinicalTrials.gov, Custom APIs...
-          </p>
+        <div class="space-y-1 max-h-32 overflow-y-auto">
+          <label
+            v-for="tool in availableTools"
+            :key="tool.id"
+            class="flex items-start gap-2 p-2 rounded-md cursor-pointer transition-colors"
+            :class="(selectedAgent?.tools || []).some((t: AgentTool) => t.id === tool.id) ? 'bg-primary-50' : 'hover:bg-gray-50'"
+          >
+            <input
+              type="checkbox"
+              :checked="(selectedAgent?.tools || []).some((t: AgentTool) => t.id === tool.id)"
+              @change="toggleTool(tool)"
+              class="mt-0.5 accent-primary-600"
+            />
+            <div class="flex-1 min-w-0">
+              <div class="text-xs font-medium text-gray-900">{{ tool.name }}</div>
+              <div class="text-[10px] text-gray-400 truncate">{{ tool.description }}</div>
+            </div>
+          </label>
         </div>
+        <p v-if="availableTools.length === 0" class="text-xs text-gray-400 text-center py-2">
+          Loading tools...
+        </p>
       </div>
 
       <!-- Rogue Mode -->

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { Settings, Play, Info, CheckCircle, XCircle, Square } from 'lucide-vue-next'
+import { Settings, Play, Info, CheckCircle, XCircle, Square, Save, X, Download } from 'lucide-vue-next'
 import Canvas from './components/Canvas.vue'
 import AgentPalette from './components/AgentPalette.vue'
 import PropertiesPanel from './components/PropertiesPanel.vue'
@@ -17,6 +17,14 @@ const {
   apiEndpoint,
   isSimulating,
   selectedNode,
+  globalModel,
+  globalTemperature,
+  globalBehaviorPreset,
+  allAvailableModels,
+  endpointConfigs,
+  setGlobalModel,
+  setGlobalTemperature,
+  setGlobalBehaviorPreset,
   exportTopology,
   importTopology,
   setSimulationResults,
@@ -31,9 +39,40 @@ const {
 const showSettings = ref(false)
 const showOutput = ref(false)
 const showAbout = ref(false)
+const showSaveTemplateModal = ref(false)
+const templateName = ref('')
+const templateDescription = ref('')
+const savingTemplate = ref(false)
 const simulationError = ref<string | null>(null)
 const simulationSuccess = ref<{ agentCount: number; totalTime: number } | null>(null)
 const scenarioLoaderRef = ref<InstanceType<typeof ScenarioLoader> | null>(null)
+
+async function saveTemplate() {
+  if (!templateName.value.trim()) return
+  savingTemplate.value = true
+  try {
+    const topology = exportTopology()
+    await fetch('/api/templates', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: templateName.value,
+        description: templateDescription.value || undefined,
+        topology
+      })
+    })
+    showSaveTemplateModal.value = false
+    templateName.value = ''
+    templateDescription.value = ''
+    simulationSuccess.value = { agentCount: 0, totalTime: 0 }
+    setTimeout(() => simulationSuccess.value = null, 2000)
+  } catch (err) {
+    simulationError.value = 'Failed to save template'
+    setTimeout(() => simulationError.value = null, 3000)
+  } finally {
+    savingTemplate.value = false
+  }
+}
 
 function openScenarioLoader() {
   scenarioLoaderRef.value?.open()
@@ -66,7 +105,17 @@ async function runSimulation() {
       body: JSON.stringify({
         topology,
         apiKey: apiKey.value,
-        apiEndpoint: apiEndpoint.value
+        apiEndpoint: apiEndpoint.value,
+        globalModel: globalModel.value,
+        globalTemperature: globalTemperature.value,
+        globalBehaviorPreset: globalBehaviorPreset.value,
+        // Send endpoint configs for auto endpoint selection based on model
+        endpointConfigs: endpointConfigs.value.map(c => ({
+          id: c.id,
+          apiKey: c.apiKey,
+          endpoint: c.endpoint,
+          models: c.models
+        }))
       }),
       signal: controller.signal
     })
@@ -248,26 +297,94 @@ function toggleOutput() {
           {{ simulationError }}
         </div>
 
-        <!-- Scenario Loader -->
-        <ScenarioLoader ref="scenarioLoaderRef" />
+        <!-- GROUP 1: Model Configuration -->
+        <div class="flex items-center gap-4 px-4 py-2 bg-gradient-to-r from-gray-50 to-white rounded-lg border border-gray-200 shadow-sm">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-semibold text-gray-600">Model</span>
+            <select
+              :value="globalModel"
+              @change="setGlobalModel(($event.target as HTMLSelectElement).value as any)"
+              class="text-sm font-medium text-gray-800 bg-white border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary-500 cursor-pointer"
+            >
+              <option v-for="model in allAvailableModels" :key="model" :value="model">
+                {{ model }}
+              </option>
+              <!-- Fallback if no models configured -->
+              <option v-if="allAvailableModels.length === 0" value="gpt-4o">gpt-4o</option>
+            </select>
+          </div>
+          <div class="h-6 w-px bg-gray-300"></div>
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-semibold text-gray-600">Preset</span>
+            <select
+              :value="globalBehaviorPreset"
+              @change="setGlobalBehaviorPreset(($event.target as HTMLSelectElement).value)"
+              class="text-sm font-medium text-gray-800 bg-white border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary-500 cursor-pointer"
+            >
+              <option value="analytical">Analytical</option>
+              <option value="creative">Creative</option>
+              <option value="adversarial">Adversarial</option>
+              <option value="balanced">Balanced</option>
+            </select>
+          </div>
+          <div class="h-6 w-px bg-gray-300"></div>
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-semibold text-gray-600">Temp</span>
+            <input
+              type="number"
+              :value="globalTemperature"
+              @change="setGlobalTemperature(parseFloat(($event.target as HTMLInputElement).value))"
+              min="0"
+              max="2"
+              step="0.1"
+              class="w-14 text-sm font-medium text-gray-800 bg-white border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary-500 text-center"
+            />
+          </div>
+        </div>
 
-        <!-- About button -->
-        <button
-          @click="showAbout = true"
-          class="p-2 text-gray-400 hover:text-gray-600 transition-colors"
-          title="About"
-        >
-          <Info class="w-5 h-5" />
-        </button>
+        <!-- Separator -->
+        <div class="h-8 w-px bg-gray-200"></div>
 
-        <!-- Settings button -->
-        <button
-          @click="showSettings = true"
-          class="p-2 text-gray-400 hover:text-gray-600 transition-colors"
-          title="Settings"
-        >
-          <Settings class="w-5 h-5" />
-        </button>
+        <!-- GROUP 2: Project Actions -->
+        <div class="flex items-center gap-2">
+          <button
+            @click="showSaveTemplateModal = true"
+            class="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm"
+            title="Save current topology as template"
+          >
+            <Save class="w-4 h-4" />
+            Save
+          </button>
+          <button
+            @click="handleExport"
+            class="flex items-center justify-center w-9 h-9 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            title="Download JSON"
+          >
+            <Download class="w-4 h-4" />
+          </button>
+          <ScenarioLoader ref="scenarioLoaderRef" />
+        </div>
+
+        <!-- Separator -->
+        <div class="h-8 w-px bg-gray-200"></div>
+
+        <!-- GROUP 3: Settings & Run -->
+        <div class="flex items-center gap-1">
+          <button
+            @click="showAbout = true"
+            class="flex items-center justify-center w-9 h-9 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            title="About"
+          >
+            <Info class="w-5 h-5" />
+          </button>
+          <button
+            @click="showSettings = true"
+            class="flex items-center justify-center w-9 h-9 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            title="Settings"
+          >
+            <Settings class="w-5 h-5" />
+          </button>
+        </div>
 
         <!-- Run/Stop button -->
         <button
@@ -305,5 +422,54 @@ function toggleOutput() {
     <SettingsModal :open="showSettings" @close="showSettings = false" />
     <OutputDrawer :open="showOutput" @close="showOutput = false" />
     <AboutModal :open="showAbout" @close="showAbout = false" />
+
+    <!-- Save Template Modal -->
+    <div v-if="showSaveTemplateModal" class="fixed inset-0 z-50 flex items-center justify-center">
+      <div class="absolute inset-0 bg-black/50" @click="showSaveTemplateModal = false"></div>
+      <div class="relative bg-white rounded-lg shadow-xl w-96 p-6">
+        <button
+          @click="showSaveTemplateModal = false"
+          class="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+        >
+          <X class="w-5 h-5" />
+        </button>
+        <h2 class="text-lg font-semibold text-gray-900 mb-4">Save as Template</h2>
+        <div class="space-y-4">
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">Template Name *</label>
+            <input
+              v-model="templateName"
+              type="text"
+              placeholder="My Custom Template"
+              class="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-primary-600"
+            />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">Description (optional)</label>
+            <textarea
+              v-model="templateDescription"
+              placeholder="Describe what this template does..."
+              rows="3"
+              class="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-primary-600 resize-none"
+            ></textarea>
+          </div>
+          <div class="flex justify-end gap-2 pt-2">
+            <button
+              @click="showSaveTemplateModal = false"
+              class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
+            >
+              Cancel
+            </button>
+            <button
+              @click="saveTemplate"
+              :disabled="!templateName.trim() || savingTemplate"
+              class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {{ savingTemplate ? 'Saving...' : 'Save Template' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>

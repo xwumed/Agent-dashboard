@@ -23,10 +23,20 @@ const {
   addNode,
   addInputNode,
   addOutputNode,
-  addEdge
+  addEdge,
+  removeEdge
 } = useTopology()
 
-const { onConnect, onNodeDragStop, onPaneClick, fitView } = useVueFlow()
+const { onConnect, onNodeDragStop, onPaneClick, fitView, onEdgesChange } = useVueFlow()
+
+// Handle edge deletion
+onEdgesChange((changes) => {
+  changes.forEach(change => {
+    if (change.type === 'remove') {
+      removeEdge(change.id)
+    }
+  })
+})
 
 // Track node positions
 const nodePositions = ref<Record<string, { x: number; y: number }>>({})
@@ -62,6 +72,16 @@ const vueFlowNodes = computed(() => {
   }))
 
   return [...inputNodesMapped, ...agentNodes, ...outputNodesMapped]
+})
+
+// Key to force VueFlow to re-render when node count changes (fixes sync issues)
+const flowKey = computed(() => {
+  const ids = [
+    ...topologyNodes.value.map(n => n.id),
+    ...topologyInputNodes.value.map(n => n.id),
+    ...topologyOutputNodes.value.map(n => n.id)
+  ]
+  return ids.sort().join(',')
 })
 
 // Convert topology edges to Vue Flow format
@@ -149,7 +169,7 @@ function onDrop(event: DragEvent) {
     role: '',
     behaviorPreset: isOversight ? 'analytical' : 'balanced',
     temperature: 0.7,
-    model: 'gpt-5-nano',
+    // model is no longer per-node, uses global model
     isOversight,
     suspicionLevel: isOversight ? 'trusting' : undefined,
     rogueMode: { enabled: false }
@@ -330,6 +350,7 @@ watch(isCanvasEmpty, (empty) => {
 <template>
   <div class="flex-1 h-full relative" @drop="onDrop" @dragover="onDragOver">
     <VueFlow
+      :key="flowKey"
       :nodes="vueFlowNodes"
       :edges="vueFlowEdges"
       @node-click="onNodeClick"

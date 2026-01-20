@@ -47,7 +47,6 @@ const statusClass = computed(() => {
       </div>
       <div class="flex-1 min-w-0">
         <div class="font-medium text-gray-900 text-xs truncate">{{ data.name }}</div>
-        <div class="text-[10px] text-gray-400 truncate">{{ data.model }}</div>
       </div>
       <!-- Status indicators -->
       <div class="flex items-center">
@@ -80,15 +79,8 @@ const statusClass = computed(() => {
     </div>
 
     <!-- Badges -->
-    <div class="flex flex-wrap gap-1 mt-2">
+    <div class="flex flex-wrap gap-1 mt-2" v-if="data.isOversight">
       <span
-        class="px-1.5 py-0.5 text-[10px] rounded font-medium"
-        :class="data.behaviorPreset === 'adversarial' ? 'bg-red-50 text-red-600' : 'bg-gray-100 text-gray-600'"
-      >
-        {{ data.behaviorPreset }}
-      </span>
-      <span
-        v-if="data.isOversight"
         class="px-1.5 py-0.5 text-[10px] rounded font-medium bg-gray-100 text-gray-600"
       >
         {{ data.suspicionLevel || 'trusting' }}

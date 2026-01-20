@@ -63,3 +63,8 @@ coverage.xml
 # Testing
 .tox/
 .nox/
+
+# Data directories (large files - don't commit to git)
+server/data/
+*.pdf
+*_chroma_db_qwen/

@@ -1,5 +1,13 @@
 export type BehaviorPreset = 'analytical' | 'creative' | 'adversarial' | 'balanced'
-export type ModelType = 'gpt-5-nano' | 'gpt-5-mini' | 'gpt-5.2'
+// Models from config.toml
+export type ModelType =
+  | 'gpt-5.2'   // OpenAI GPT-5
+  | 'gpt-4o'    // OpenAI GPT-4o  
+  | 'Llama-4-Maverick-17B-128E-Instruct-FP8'  // Local Llama
+  | 'GPT-OSS-120B'     // Local GPT
+  | 'GLM-4.7-FP8'      // Local GLM
+  | 'gpt-5-nano'       // Legacy
+  | 'gpt-5-mini'       // Legacy
 export type SuspicionLevel = 'trusting' | 'suspicious'
 export type RogueProfile = 'hallucination' | 'omission' | 'contradiction' | 'ignore-constraints'
 export type RelationshipType = 'informs' | 'critiques' | 'reports-to' | 'collaborates' | 'validates'
@@ -35,7 +43,7 @@ export interface AgentNodeData {
   systemPrompt?: string
   behaviorPreset: BehaviorPreset
   temperature: number
-  model: ModelType
+  model?: ModelType  // DEPRECATED: use global model config instead
   isOversight: boolean
   suspicionLevel?: SuspicionLevel
   rogueMode: RogueMode

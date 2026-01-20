@@ -4,11 +4,19 @@ import time
 from typing import AsyncGenerator, Optional
 from openai import AsyncOpenAI
 
+# openai-agents SDK imports
+try:
+    from agents import Agent, Runner, ModelSettings, OpenAIChatCompletionsModel, ItemHelpers
+    AGENTS_SDK_AVAILABLE = True
+except ImportError:
+    AGENTS_SDK_AVAILABLE = False
+
 from ..models import (
     AgentNodeData, AgentEdge, InputNodeData, Topology,
-    SimulationResult, TokenUsage
+    SimulationResult, TokenUsage, EndpointConfig
 )
 from .prompt_builder import build_prompt, get_relationship_prefix, IncomingContext
+from ..tools.tool_wrappers import get_tools_for_node
 
 
 def topological_sort(nodes: list[AgentNodeData], edges: list[AgentEdge]) -> list[list[str]]:
@@ -77,7 +85,11 @@ def get_incoming_context(
 async def execute_simulation_stream(
     topology: Topology,
     api_key: str,
-    api_endpoint: Optional[str] = None
+    api_endpoint: Optional[str] = None,
+    global_model: Optional[str] = "gpt-5.2",
+    global_temperature: Optional[float] = 0.5,
+    global_behavior_preset: Optional[str] = "analytical",
+    endpoint_configs: Optional[list[EndpointConfig]] = None
 ) -> AsyncGenerator[dict, None]:
     """
     Execute simulation for the given topology (streaming version).
@@ -87,12 +99,29 @@ async def execute_simulation_stream(
     edges = topology.edges
     input_nodes = topology.input_nodes or []
 
-    # Configure OpenAI client with optional custom endpoint
-    client_kwargs = {"api_key": api_key}
-    if api_endpoint and api_endpoint != "https://api.openai.com":
-        client_kwargs["base_url"] = f"{api_endpoint}/v1"
+    # Helper to get client for a specific model
+    def get_client_for_model(model_name: str) -> AsyncOpenAI:
+        # 1. Try to find model in endpoint configs
+        if endpoint_configs:
+            for config in endpoint_configs:
+                if model_name in config.models:
+                    return AsyncOpenAI(
+                        api_key=config.api_key,
+                        base_url=config.endpoint
+                    )
+        
+        # 2. Fallback to default provided API key/endpoint
+        # If the endpoint is specific to OpenAI, use it. Otherwise assume it acts as a fallback.
+        if api_endpoint and "openai.com" not in api_endpoint:
+            return AsyncOpenAI(
+                api_key=api_key,
+                base_url=api_endpoint
+            )
+        else:
+            return AsyncOpenAI(api_key=api_key)
 
-    client = AsyncOpenAI(**client_kwargs)
+    # Initial client (will be updated per node if needed)
+    client = get_client_for_model(global_model or "gpt-4o")
 
     # Extract master task from input nodes (combine all if multiple)
     master_task = "\n\n".join(
@@ -131,8 +160,8 @@ async def execute_simulation_stream(
                 # Build the prompt
                 system_prompt = build_prompt(node, incoming_context)
 
-                # Determine temperature (higher for rogue agents)
-                temperature = node.temperature
+                # Determine temperature - use global setting
+                temperature = global_temperature or 0.5
                 if node.rogue_mode.enabled:
                     temperature = min(temperature + 0.3, 1.5)
 
@@ -171,12 +200,65 @@ async def execute_simulation_stream(
                         "content": "Please provide your initial analysis and response based on your role."
                     })
 
-                # Call OpenAI
-                # Use max_completion_tokens for newer models
-                is_new_model = any(node.model.startswith(p) for p in ("o1", "o3", "gpt-4.5", "gpt-5"))
+                # Call OpenAI - use global model only (node.model is deprecated)
+                model_to_use = global_model or "gpt-4o"
+                is_new_model = any(model_to_use.startswith(p) for p in ("o1", "o3", "gpt-4.5", "gpt-5"))
 
+                # Get correct client for this model
+                client = get_client_for_model(model_to_use)
+
+                # Check if node has tools configured and SDK is available
+                node_tools = getattr(node, 'tools', []) or []
+                has_tools = len(node_tools) > 0 and AGENTS_SDK_AVAILABLE
+
+                if has_tools:
+                    # Use openai-agents SDK for tool calling
+                    tools = get_tools_for_node(node_tools)
+                    
+                    if tools:
+                        agent = Agent(
+                            name=node.name or node.id,
+                            instructions=system_prompt,
+                            model=OpenAIChatCompletionsModel(
+                                model=model_to_use,
+                                openai_client=client
+                            ),
+                            model_settings=ModelSettings(
+                                temperature=temperature if not is_new_model else None,
+                                tool_choice="auto",
+                            ),
+                            tools=tools,
+                        )
+                        
+                        # Build user prompt
+                        user_prompt = user_content if user_content else "Please provide your analysis."
+                        
+                        # Run agent with tools
+                        agent_result = await Runner.run(agent, user_prompt)
+                        output_text = ItemHelpers.text_message_outputs(agent_result.new_items)
+                        
+                        duration = int((time.time() - start_time) * 1000)
+                        
+                        # Estimate tokens (SDK doesn't provide exact count)
+                        prompt_tokens = len(system_prompt + user_prompt) // 4
+                        completion_tokens = len(output_text) // 4
+                        
+                        result = SimulationResult(
+                            output=output_text,
+                            model=model_to_use,
+                            tokens=TokenUsage(
+                                prompt=prompt_tokens,
+                                completion=completion_tokens
+                            ),
+                            duration=duration
+                        )
+                        
+                        results[node_id] = result
+                        return {"nodeId": node_id, "result": result, "error": None}
+
+                # Fallback to direct API call (no tools or SDK not available)
                 completion_params = {
-                    "model": node.model,
+                    "model": model_to_use,
                     "messages": messages,
                 }
 
@@ -192,7 +274,7 @@ async def execute_simulation_stream(
 
                 result = SimulationResult(
                     output=response.choices[0].message.content or "",
-                    model=node.model,
+                    model=model_to_use,
                     tokens=TokenUsage(
                         prompt=response.usage.prompt_tokens if response.usage else 0,
                         completion=response.usage.completion_tokens if response.usage else 0

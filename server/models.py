@@ -81,10 +81,25 @@ class Topology(BaseModel):
         populate_by_name = True
 
 
+class EndpointConfig(BaseModel):
+    """API endpoint configuration for auto endpoint selection"""
+    id: str
+    api_key: str = Field(alias="apiKey")
+    endpoint: str
+    models: list[str] = []
+    
+    class Config:
+        populate_by_name = True
+
+
 class SimulationRequest(BaseModel):
     topology: Topology
     api_key: str = Field(alias="apiKey")
     api_endpoint: Optional[str] = Field("https://api.openai.com", alias="apiEndpoint")
+    global_model: Optional[str] = Field("gpt-4o", alias="globalModel")
+    global_temperature: Optional[float] = Field(0.5, alias="globalTemperature")
+    global_behavior_preset: Optional[str] = Field("analytical", alias="globalBehaviorPreset")
+    endpoint_configs: Optional[list[EndpointConfig]] = Field(None, alias="endpointConfigs")
 
     class Config:
         populate_by_name = True

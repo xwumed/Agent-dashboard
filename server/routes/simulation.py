@@ -41,7 +41,11 @@ async def simulate(request: SimulationRequest):
             async for event in execute_simulation_stream(
                 request.topology,
                 request.api_key,
-                request.api_endpoint
+                request.api_endpoint,
+                request.global_model,
+                request.global_temperature,
+                request.global_behavior_preset,
+                request.endpoint_configs
             ):
                 event_count += 1
                 logger.info(f"Streaming event: {event['type']} {event.get('nodeId', '')}")
@@ -71,3 +75,144 @@ async def health():
     Health check endpoint
     """
     return {"status": "ok", "timestamp": datetime.utcnow().isoformat() + "Z"}
+
+
+@router.post("/test-connection")
+async def test_connection(request: dict):
+    """
+    POST /api/test-connection
+    Test if the API connection is working with the provided credentials.
+    Can test a single model or multiple models.
+    """
+    from openai import AsyncOpenAI
+    import asyncio
+    
+    api_key = request.get("apiKey")
+    api_endpoint = request.get("apiEndpoint")
+    models = request.get("models", [])  # List of models to test
+    model = request.get("model")  # Single model (backward compatible)
+    
+    if not api_key:
+        raise HTTPException(status_code=400, detail="API key is required")
+    
+    # If single model provided, convert to list
+    if model and not models:
+        models = [model]
+    
+    if not models:
+        raise HTTPException(status_code=400, detail="At least one model is required")
+    
+    # Configure client
+    client_kwargs = {"api_key": api_key}
+    if api_endpoint and api_endpoint != "https://api.openai.com":
+        # Ensure endpoint ends with /v1 or similar
+        base_url = api_endpoint
+        if not base_url.endswith('/v1') and not base_url.endswith('/v1/'):
+            base_url = f"{base_url}/v1" if not base_url.endswith('/') else f"{base_url}v1"
+        client_kwargs["base_url"] = base_url
+    
+    client = AsyncOpenAI(**client_kwargs)
+    
+    async def test_single_model(model_name: str) -> dict:
+        """Test a single model and return result"""
+        try:
+            response = await client.chat.completions.create(
+                model=model_name,
+                messages=[{"role": "user", "content": "Say 'OK' in one word."}],
+                max_tokens=10
+            )
+            output = response.choices[0].message.content if response.choices else None
+            return {
+                "model": model_name,
+                "success": True,
+                "response": output
+            }
+        except Exception as e:
+            return {
+                "model": model_name,
+                "success": False,
+                "error": str(e)
+            }
+    
+    # Test all models concurrently
+    results = await asyncio.gather(*[test_single_model(m) for m in models])
+    
+    # Summary
+    successful = [r for r in results if r["success"]]
+    failed = [r for r in results if not r["success"]]
+    
+    return {
+        "success": len(failed) == 0,
+        "total": len(models),
+        "successCount": len(successful),
+        "failedCount": len(failed),
+        "results": results,
+        "message": f"{len(successful)}/{len(models)} models available"
+    }
+
+
+@router.post("/list-models")
+async def list_models(request: dict):
+    """
+    POST /api/list-models
+    Get list of available models from an API endpoint.
+    Works with OpenAI-compatible APIs (including local LLM servers).
+    """
+    from openai import AsyncOpenAI
+    
+    api_key = request.get("apiKey", "EMPTY")
+    api_endpoint = request.get("apiEndpoint")
+    
+    if not api_endpoint:
+        raise HTTPException(status_code=400, detail="API endpoint is required")
+    
+    try:
+        # Configure client
+        base_url = api_endpoint
+        if not base_url.endswith('/v1') and not base_url.endswith('/v1/'):
+            base_url = f"{base_url}/v1" if not base_url.endswith('/') else f"{base_url}v1"
+        
+        client = AsyncOpenAI(
+            api_key=api_key,
+            base_url=base_url
+        )
+        
+        # Get list of models
+        models_response = await client.models.list()
+        
+        # Extract model IDs
+        all_model_ids = [model.id for model in models_response.data]
+        
+        # Filter for chat models only (for OpenAI endpoints)
+        # Only keep gpt-* models, filter out embeddings, whisper, dall-e, tts, etc.
+        exclude_keywords = ('embedding', 'whisper', 'dall-e', 'tts', 'realtime', 'audio')
+        
+        # Check if this looks like an OpenAI endpoint (not local)
+        is_openai = 'openai.com' in api_endpoint or 'azure' in api_endpoint
+        
+        if is_openai:
+            model_ids = [
+                m for m in all_model_ids
+                if m.lower().startswith('gpt-')
+                and not any(kw in m.lower() for kw in exclude_keywords)
+            ]
+        else:
+            # For local LLMs, return all models
+            model_ids = all_model_ids
+        
+        return {
+            "success": True,
+            "models": model_ids,
+            "count": len(model_ids),
+            "message": f"Found {len(model_ids)} models"
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to list models: {e}")
+        return {
+            "success": False,
+            "models": [],
+            "count": 0,
+            "error": str(e),
+            "message": f"Failed to list models: {str(e)}"
+        }

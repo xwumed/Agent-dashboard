@@ -1,0 +1,6 @@
+{
+    "patient_id": "HEMA002",
+    "timestamp": "2026-01-15T11:00:00",
+    "patient_history": "Patient History:\n- Demographics: 45岁女性\n- Diagnosis: 急性淋巴细胞白血病 (ALL), Ph+ B-ALL\n- Molecular Markers: BCR-ABL1 阳性 (p190)\n- Prior Treatment: 诱导化疗1周期后达CR\n- Current Status: 巩固治疗阶段\n\n临床表现:\n- 诊断时WBC 85×10^9/L\n- 骨髓原始细胞92%\n- 诱导后MRD: 0.01% (流式)\n\n分子学检测:\n- BCR-ABL1 (p190): IS 0.1%\n- 突变分析: 未检测到ABL1激酶区突变\n\n其他:\n- 有HLA全相合同胞供者\n- 心功能正常, ECOG PS 0\n\nClinical Question:\n请评估该 Ph+ ALL 患者是否需要进行异基因造血干细胞移植（allo-HSCT），以及移植时机选择",
+    "role_hint": null
+}

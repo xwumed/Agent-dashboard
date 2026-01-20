@@ -1944,5 +1944,156 @@ QUESTIONS FOR TRIAGE TEAM:
         { id: 'e-out', source: 'ed-medical-director', target: 'output-triage', relationshipType: 'informs' }
       ]
     }
+  },
+
+  // ============================================
+  // SCENARIO: HEMATOLOGY TUMOR BOARD (9 Agents) - hemonc-agent compatible
+  // ============================================
+  {
+    id: 'hematology-mdt',
+    name: 'Hematology Tumor Board',
+    description: 'Hematological multidisciplinary tumor board with 9 specialist agents based on hemonc-agent framework',
+    category: 'clinical-decisions',
+    topology: {
+      name: 'Hematology MDT',
+      description: 'Multidisciplinary tumor board discussion for hematological malignancies',
+      inputNodes: [
+        {
+          id: 'input-patient',
+          type: 'input',
+          task: `Patient History:
+- Demographics: [Age, Gender]
+- Diagnosis: [e.g., Diffuse Large B-Cell Lymphoma, Stage III]
+- Molecular Markers: [e.g., MYC/BCL2 double-expressor]
+- Prior Treatment: [if any]
+- Current Status: [newly diagnosed / relapsed / refractory]
+
+Clinical Question:
+Please evaluate treatment options for this patient.`
+        }
+      ],
+      outputNodes: [
+        {
+          id: 'output-mdt',
+          type: 'output',
+          label: 'MDT Consensus'
+        }
+      ],
+      nodes: [
+        {
+          id: 'radiologist-precheck',
+          name: 'Radiologist',
+          role: 'You are a radiologist performing a pre-check of the patient record in the hematological multidisciplinary tumor board. Use rag_staging_uicc and rag_guideline tools to retrieve staging criteria and imaging requirements. If disease is treatment-naive with no documented stage, derive tumor stage from patient history. Evaluate if additional radiology tests are necessary. If no recommendation needed, return: "No radiological action required based on current data."',
+          behaviorPreset: 'analytical',
+          temperature: 0.3,
+          model: 'gpt-5.2',
+          isOversight: false,
+          rogueMode: { enabled: false }
+        },
+        {
+          id: 'pathologist-precheck',
+          name: 'Pathologist',
+          role: 'You are a pathologist in the hematological multidisciplinary tumor board. Use rag_pathology, rag_tool_who, and rag_guideline tools. If research question is about diagnosis, derive diagnosis cautiously. Evaluate if pathological information is sufficient. If additional tests needed, list them explicitly. If no recommendation needed, return: "No pathological action required based on current data."',
+          behaviorPreset: 'analytical',
+          temperature: 0.3,
+          model: 'gpt-5.2',
+          isOversight: false,
+          rogueMode: { enabled: false }
+        },
+        {
+          id: 'surgeon',
+          name: 'Surgeon',
+          role: 'You are a surgeon participating in a hematological multidisciplinary tumor board. Provide: 1) Surgical assessment - is surgery indicated? 2) Ongoing treatment review 3) Clinical trial consideration 4) Comorbidity management 5) Additional testing. State treatment intent (palliative/curative/unclear). Use rag_guideline and web_search_tool. Add references.',
+          behaviorPreset: 'analytical',
+          temperature: 0.5,
+          model: 'gpt-5.2',
+          isOversight: false,
+          rogueMode: { enabled: false }
+        },
+        {
+          id: 'medical-oncologist',
+          name: 'Medical Oncologist',
+          role: 'You are a medical oncologist participating in a hematological multidisciplinary tumor board. Provide: 1) Pharmacological/cellular therapy assessment - list suitable regimens 2) Cross-check against treatment history 3) Ongoing treatment review 4) Clinical trial consideration 5) Comorbidity management. State treatment intent. Use rag_guideline, genesearch_batch_tool, web_search_tool. Add references.',
+          behaviorPreset: 'analytical',
+          temperature: 0.5,
+          model: 'gpt-5.2',
+          isOversight: false,
+          rogueMode: { enabled: false }
+        },
+        {
+          id: 'radiation-oncologist',
+          name: 'Radiation Oncologist',
+          role: 'You are a radiation oncologist participating in a hematological multidisciplinary tumor board. Provide: 1) Radiotherapy assessment - is RT indicated? Specify intent (curative/palliative/consolidative) 2) Ongoing treatment review 3) Clinical trial consideration 4) Comorbidity management. State treatment intent. Use rag_guideline and web_search_tool. Add references.',
+          behaviorPreset: 'analytical',
+          temperature: 0.5,
+          model: 'gpt-5.2',
+          isOversight: false,
+          rogueMode: { enabled: false }
+        },
+        {
+          id: 'geneticist',
+          name: 'Geneticist',
+          role: 'You are a geneticist participating in a hematological multidisciplinary tumor board. Step 1: Identify genetic alterations; if present, call genesearch_batch_tool. If none: return "No genetic alterations identified; targeted therapy not applicable." Step 2: For each alteration, provide pharmacological recommendations with prior use check, disease match, support flags, evidence level. Group by mutation.',
+          behaviorPreset: 'analytical',
+          temperature: 0.3,
+          model: 'gpt-5.2',
+          isOversight: false,
+          rogueMode: { enabled: false }
+        },
+        {
+          id: 'general-practitioner',
+          name: 'General Practitioner',
+          role: 'You are a general practitioner in the hematological MDT. Your scope: non-cancer conditions, supportive care, medical optimization. Tasks: 1) Identify non-oncologic comorbidities and tumor-related complications 2) Provide supportive recommendations 3) Recommend referrals if needed 4) Include safety flags. Do NOT discuss tumor-specific treatment. Keep answer ≤200 words. If nothing needed: "No general medicine action required."',
+          behaviorPreset: 'balanced',
+          temperature: 0.5,
+          model: 'gpt-5.2',
+          isOversight: false,
+          rogueMode: { enabled: false }
+        },
+        {
+          id: 'additional-oncologist',
+          name: 'Additional Oncologist',
+          role: 'You are an additional medical oncologist on the MDT. Phase 1: Independent analysis using rag_guideline. Phase 2: Review recommendations from surgeon, medical oncologist, radiation oncologist. Prioritize PubMed evidence matching patient subtype. Evaluate clinical appropriateness. Provide affirmation or specific additions. Output: recommendation + references.',
+          behaviorPreset: 'analytical',
+          temperature: 0.5,
+          model: 'gpt-5.2',
+          isOversight: false,
+          rogueMode: { enabled: false }
+        },
+        {
+          id: 'mdt-chair',
+          name: 'MDT Chairman',
+          role: 'You are the chairman of the multidisciplinary tumor board. Synthesize all specialist recommendations. Rules: 1) No new medicine 2) Priority to Surgeon, Medical Oncologist, Radiation Oncologist, Additional Oncologist 3) Filter by subtype and treatment history 4) Focus on research question 5) Preserve uncertainty language. Output format: ## Final Board Recommendation with Intent and Unified plan, ## Reference',
+          behaviorPreset: 'balanced',
+          temperature: 0.5,
+          model: 'gpt-5.2',
+          isOversight: true,
+          suspicionLevel: 'suspicious',
+          rogueMode: { enabled: false }
+        }
+      ],
+      edges: [
+        { id: 'e1', source: 'input-patient', target: 'radiologist-precheck', relationshipType: 'informs' },
+        { id: 'e2', source: 'input-patient', target: 'pathologist-precheck', relationshipType: 'informs' },
+        { id: 'e3', source: 'radiologist-precheck', target: 'surgeon', relationshipType: 'informs' },
+        { id: 'e4', source: 'pathologist-precheck', target: 'surgeon', relationshipType: 'informs' },
+        { id: 'e5', source: 'radiologist-precheck', target: 'medical-oncologist', relationshipType: 'informs' },
+        { id: 'e6', source: 'pathologist-precheck', target: 'medical-oncologist', relationshipType: 'informs' },
+        { id: 'e7', source: 'radiologist-precheck', target: 'radiation-oncologist', relationshipType: 'informs' },
+        { id: 'e8', source: 'pathologist-precheck', target: 'geneticist', relationshipType: 'informs' },
+        { id: 'e9', source: 'input-patient', target: 'general-practitioner', relationshipType: 'informs' },
+        { id: 'e10', source: 'surgeon', target: 'additional-oncologist', relationshipType: 'informs' },
+        { id: 'e11', source: 'medical-oncologist', target: 'additional-oncologist', relationshipType: 'informs' },
+        { id: 'e12', source: 'radiation-oncologist', target: 'additional-oncologist', relationshipType: 'informs' },
+        { id: 'e13', source: 'surgeon', target: 'mdt-chair', relationshipType: 'reports-to' },
+        { id: 'e14', source: 'medical-oncologist', target: 'mdt-chair', relationshipType: 'reports-to' },
+        { id: 'e15', source: 'radiation-oncologist', target: 'mdt-chair', relationshipType: 'reports-to' },
+        { id: 'e16', source: 'geneticist', target: 'mdt-chair', relationshipType: 'reports-to' },
+        { id: 'e17', source: 'general-practitioner', target: 'mdt-chair', relationshipType: 'reports-to' },
+        { id: 'e18', source: 'additional-oncologist', target: 'mdt-chair', relationshipType: 'reports-to' },
+        { id: 'e-out', source: 'mdt-chair', target: 'output-mdt', relationshipType: 'informs' }
+      ]
+    }
   }
 ]
+

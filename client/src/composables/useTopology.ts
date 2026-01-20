@@ -1,5 +1,5 @@
 import { ref, computed } from 'vue'
-import type { AgentNodeData, AgentEdge, Topology, SimulationResult, RelationshipType, InputNodeData, OutputNodeData } from '../types'
+import type { AgentNodeData, AgentEdge, Topology, SimulationResult, RelationshipType, InputNodeData, OutputNodeData, ModelType } from '../types'
 
 const nodes = ref<AgentNodeData[]>([])
 const inputNodes = ref<InputNodeData[]>([])
@@ -10,8 +10,45 @@ const topologyDescription = ref('')
 const selectedNodeId = ref<string | null>(null)
 const simulationResults = ref<Record<string, SimulationResult>>({})
 const isSimulating = ref(false)
+
+// Multi-endpoint API configuration
+interface EndpointConfig {
+  id: string
+  label: string
+  apiKey: string
+  endpoint: string
+  models: string[]  // User-defined available models
+}
+
+const defaultEndpointConfigs: EndpointConfig[] = [
+  { id: 'openai', label: 'OpenAI', apiKey: '', endpoint: 'https://api.openai.com/v1', models: ['gpt-4o', 'gpt-5.2'] },
+  { id: 'local', label: 'Local LLM', apiKey: 'EMPTY', endpoint: 'http://localhost:11434/v1', models: ['GPT-OSS-120B', 'GLM-4.7-FP8'] },
+  { id: 'embed', label: 'Embedding', apiKey: 'EMPTY', endpoint: 'http://localhost:8080/v1', models: ['Qwen3-Embedding-8B'] }
+]
+
+// Load from localStorage or use defaults
+const savedConfigs = localStorage.getItem('endpoint_configs')
+const endpointConfigs = ref<EndpointConfig[]>(
+  savedConfigs ? JSON.parse(savedConfigs) : defaultEndpointConfigs
+)
+
+// Legacy single endpoint (for backward compatibility)
 const apiKey = ref(localStorage.getItem('openai_api_key') || '')
 const apiEndpoint = ref(localStorage.getItem('openai_api_endpoint') || 'https://api.openai.com')
+
+// Computed: all available models from all endpoints
+const allAvailableModels = computed(() => {
+  const models: string[] = []
+  for (const config of endpointConfigs.value) {
+    models.push(...config.models)
+  }
+  return [...new Set(models)]  // Remove duplicates
+})
+
+// Global model configuration (all agents use this)
+const globalModel = ref<ModelType>(localStorage.getItem('global_model') as ModelType || 'gpt-5.2')
+const globalTemperature = ref<number>(parseFloat(localStorage.getItem('global_temperature') || '0.5'))
+const globalBehaviorPreset = ref<string>(localStorage.getItem('global_behavior_preset') || 'analytical')
 
 // Streaming simulation state
 const processingNodeIds = ref<Set<string>>(new Set())
@@ -235,6 +272,22 @@ export function useTopology() {
     isSimulating,
     apiKey,
     apiEndpoint,
+    // Global model config
+    globalModel,
+    globalTemperature,
+    globalBehaviorPreset,
+    setGlobalModel: (model: ModelType) => {
+      globalModel.value = model
+      localStorage.setItem('global_model', model)
+    },
+    setGlobalTemperature: (temp: number) => {
+      globalTemperature.value = temp
+      localStorage.setItem('global_temperature', temp.toString())
+    },
+    setGlobalBehaviorPreset: (preset: string) => {
+      globalBehaviorPreset.value = preset
+      localStorage.setItem('global_behavior_preset', preset)
+    },
     addNode,
     updateNode,
     removeNode,
@@ -263,6 +316,28 @@ export function useTopology() {
     setProcessingNodes,
     markNodeComplete,
     clearProcessingNodes,
-    updateNodeResult
+    updateNodeResult,
+    // Multi-endpoint configuration
+    endpointConfigs,
+    allAvailableModels,
+    updateEndpointConfig: (id: string, updates: Partial<{ apiKey: string; endpoint: string; models: string[] }>) => {
+      const config = endpointConfigs.value.find(c => c.id === id)
+      if (config) {
+        Object.assign(config, updates)
+        localStorage.setItem('endpoint_configs', JSON.stringify(endpointConfigs.value))
+      }
+    },
+    saveEndpointConfigs: () => {
+      localStorage.setItem('endpoint_configs', JSON.stringify(endpointConfigs.value))
+    },
+    getEndpointForModel: (model: string) => {
+      for (const config of endpointConfigs.value) {
+        if (config.models.includes(model)) {
+          return { apiKey: config.apiKey, endpoint: config.endpoint }
+        }
+      }
+      // Fallback to legacy
+      return { apiKey: apiKey.value, endpoint: apiEndpoint.value }
+    }
   }
 }

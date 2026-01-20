@@ -34,10 +34,38 @@ interface BatchResults {
 
 const selectedScenarioIds = ref<Set<string>>(new Set())
 const uploadedScenarios = ref<BatchScenario[]>([])
+const customTemplates = ref<BatchScenario[]>([])
 const batchRuns = ref<BatchRun[]>([])
 const isRunning = ref(false)
 const currentIndex = ref(0)
 const shouldCancel = ref(false)
+
+// Load custom templates from API
+async function loadCustomTemplatesForBatch() {
+  try {
+    const response = await fetch('/api/templates')
+    if (response.ok) {
+      const templates = await response.json()
+      // Fetch full topology for each template
+      const templatesWithTopology: BatchScenario[] = []
+      for (const t of templates) {
+        const fullResponse = await fetch(`/api/templates/${t.id}`)
+        if (fullResponse.ok) {
+          const full = await fullResponse.json()
+          templatesWithTopology.push({
+            id: `custom:${t.id}`,
+            name: t.name,
+            topology: full.topology,
+            source: 'builtin' // Treat as builtin since it's from server
+          })
+        }
+      }
+      customTemplates.value = templatesWithTopology
+    }
+  } catch (err) {
+    console.error('Failed to load custom templates:', err)
+  }
+}
 
 export function useBatchProcessing() {
   const allScenarios = computed<BatchScenario[]>(() => {
@@ -47,7 +75,7 @@ export function useBatchProcessing() {
       topology: s.topology,
       source: 'builtin'
     }))
-    return [...builtin, ...uploadedScenarios.value]
+    return [...builtin, ...customTemplates.value, ...uploadedScenarios.value]
   })
 
   const selectedScenarios = computed<BatchScenario[]>(() => {
@@ -121,7 +149,13 @@ export function useBatchProcessing() {
     selectedScenarioIds.value.delete(id)
   }
 
-  async function runBatch(apiKey: string, apiEndpoint?: string): Promise<boolean> {
+  async function runBatch(
+    apiKey: string,
+    apiEndpoint?: string,
+    globalModel?: string,
+    globalTemperature?: number,
+    globalBehaviorPreset?: string
+  ): Promise<boolean> {
     if (!apiKey) {
       return false
     }
@@ -163,7 +197,10 @@ export function useBatchProcessing() {
           body: JSON.stringify({
             topology: scenario.topology,
             apiKey,
-            apiEndpoint
+            apiEndpoint,
+            globalModel,
+            globalTemperature,
+            globalBehaviorPreset
           })
         })
 
@@ -250,6 +287,7 @@ export function useBatchProcessing() {
     runBatch,
     cancelBatch,
     downloadResults,
-    clearBatch
+    clearBatch,
+    loadCustomTemplatesForBatch
   }
 }

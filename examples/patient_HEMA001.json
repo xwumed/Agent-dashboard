@@ -1,0 +1,6 @@
+{
+    "patient_id": "HEMA001",
+    "timestamp": "2026-01-15T10:30:00",
+    "patient_history": "Patient History:\n- Demographics: 58岁男性\n- Diagnosis: 弥漫大B细胞淋巴瘤 (DLBCL), Ann Arbor III期\n- Molecular Markers: MYC/BCL2 双表达，Ki-67 80%\n- Prior Treatment: 无\n- Current Status: 初诊\n\n临床表现:\n- 多发淋巴结肿大（颈部、腋窝、腹股沟）\n- B症状：发热、盗汗、体重下降10%\n- LDH升高：450 U/L\n- β2微球蛋白：3.2 mg/L\n\n影像学检查:\n- PET-CT：双侧颈部、纵隔、腹膜后多发FDG高摄取淋巴结\n- SUVmax 18.5\n- 未见骨髓受累证据\n\n病理结果:\n- 淋巴结活检：CD20+, CD10+, BCL6+, MUM1-\n- 细胞起源：生发中心B细胞型 (GCB)\n- FISH: MYC重排阴性，BCL2重排阴性\n- IHC: MYC蛋白表达阳性(>40%), BCL2阳性(>50%)\n\n其他检查:\n- ECOG PS: 1分\n- 心功能：LVEF 65%\n- 肝肾功能：正常\n\nClinical Question:\n请各科室专家评估该 Double Expressor DLBCL 患者的最佳治疗方案",
+    "role_hint": null
+}
