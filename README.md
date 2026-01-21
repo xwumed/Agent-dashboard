@@ -2,152 +2,131 @@
 
 **v2.0 (Python Backend)**
 
-SEED is a visual multi-agent orchestration platform designed for constructing, configuring, and executing networks of AI agents. Originally built for pharmaceutical R&D workflows, it provides a scalable, evaluation-driven environment for complex multi-agent reasoning tasks.
+**SEED** is a state-of-the-art, visual multi-agent orchestration platform designed to streamline the construction, configuration, and execution of complex AI agent networks. Built with a focus on pharmaceutical R&D but adaptable to any domain, SEED empowers researchers to model intricate decision-making processes using a flexible graph-based interface.
 
-This version features a robust **Python/FastAPI backend** for improved performance, better async handling, and seamless integration with Python-based ML/AI tooling.
+This version leverages a high-performance **Python/FastAPI backend** to support asynchronous agent execution, batch processing, and seamless integration with the broader Python AI ecosystem.
 
-## Key Features
+## 🚀 Key Features
 
-- **Visual Graph Editor**: Intuitive node-based interface for designing agent networks using Vue Flow.
-- **Template Management**:
-    - **Save/Load**: Persist complete experimental setups (nodes, edges, global settings) to the library.
-    - **Import/Export**: Share templates as JSON files with colleagues.
-    - **Global Persistence**: Automatically saves model selection, temperature, and thinking parameters.
-- **Output Persistence**:
-    - Automatically saves simulation results to `.output` files alongside source inputs.
-    - Ensures reproducible research with file-based result tracking.
-- **Configurable Agent Behaviors**: Analytical, creative, adversarial, or balanced presets.
-- **Rich Relationship Types**: Define nuanced interactions (informs, critiques, validates, collaborates, reports-to).
-- **Rogue Mode Testing**: Inject controlled failures (hallucination, omission) for stress-testing agent networks.
-- **Parallel Execution**: Agents with no dependencies execute simultaneously using async Python.
-- **Streaming Results**: Real-time NDJSON streaming of simulation progress with live status updates.
+### 🧠 Visual Agent Orchestration
+- **Graph-Based Editor**: Design complex workflows using an intuitive node-and-edge interface (powered by Vue Flow).
+- **Flexible Topologies**: Create linear chains, hierarchical trees, or complex cyclic networks.
+- **Rich Interaction Types**: Define how agents communicate (`Informs`, `Critiques`, `Validates`, `Collaborates`, `Reports To`).
 
-## Tech Stack
+### 📦 Comprehensive Template Management
+- **Library System**: Save and load complete experimental setups from a persistent local library.
+- **Metadata Tracking**: Automatically tracks agent count, model usage, and input types for every template.
+- **Portable Experiments**: Import and export templates as JSON files to share with colleagues or version control.
+- **State Persistence**: Global settings (Model, Temperature, Thinking Mode) are saved within templates, ensuring reproducibility.
 
-### Frontend
-| Technology | Purpose |
-|------------|---------|
-| Vue 3 | Reactive UI framework |
-| TypeScript | Type safety & developer experience |
-| Vite | High-performance build tool |
-| Vue Flow | Graph visualization & interaction |
-| Tailwind CSS | Utility-first styling |
+### ⚡ Batch Processing & Input Handling
+- **Batch Execution**: Run simulations across multiple input files simultaneously.
+- **File & Folder Support**: Drag-and-drop support for individual text files or entire folders as input sources.
+- **Persistent Outputs**: Simulation results are automatically saved as `.output` files alongside the source inputs, maintaining a clean audit trail.
 
-### Backend
-| Technology | Purpose |
-|------------|---------|
-| Python 3.11+ | Core runtime environment |
-| FastAPI | Modern, high-performance async web framework |
-| OpenAI SDK | LLM API integration (supports OpenAI, Local LLMs) |
-| Pydantic | Data validation & serialization |
-| Uvicorn | ASGI server |
+### 🤖 Advanced Agent Configuration
+- **Behavior Presets**: Quickly configure agents as `Analytical`, `Creative`, `Adversarial`, or `Balanced`.
+- **Rogue Mode**: inject controlled failures (Hallucinations, Omissions, Contradictions) to stress-test your network's robustness.
+- **Skills & Tools**: Equip agents with specialized capabilities (e.g., RAG tools, Web Search).
+- **Oversight Roles**: Designate senior agents with "Suspicious" or "Trusting" oversight protocols.
 
-## Project Structure
+## 🛠️ Technology Stack
 
-```
+| Component | Technology | Description |
+|-----------|------------|-------------|
+| **Frontend** | **Vue 3** | Reactive, component-based UI framework. |
+| | **TypeScript** | Ensures type safety and code reliability. |
+| | **Vue Flow** | Powerful library for interactive graph visualization. |
+| | **Tailwind CSS** | Utility-first styling for a modern, responsive design. |
+| **Backend** | **Python 3.11+** | Core runtime environment. |
+| | **FastAPI** | Modern, high-performance async web framework. |
+| | **Pydantic** | Robust data validation and settings management. |
+| | **OpenAI SDK** | Standardized interface for LLM calls (supports OpenAI, LocalAI, vLLM). |
+
+## 📂 Project Structure
+
+```bash
 agentdashboardpy/
-├── client/                      # Vue 3 frontend application
+├── client/                      # Vue 3 Frontend
 │   ├── src/
-│   │   ├── components/          # Vue components (Canvas, Settings, etc.)
-│   │   ├── composables/         # Vue composition logic (useTopology, etc.)
-│   │   ├── scenarios/           # Pre-built scenarios
-│   │   ├── types/               # TypeScript type definitions
-│   │   └── App.vue              # Main application entry
+│   │   ├── components/          # UI Components (Canvas, Panels, Nodes)
+│   │   ├── composables/         # Shared Logic (State Management)
+│   │   ├── scenarios/           # Pre-built Medical R&D Scenarios
+│   │   └── types/               # TypeScript Definitions
 │   └── ...
-├── server/                      # Python FastAPI backend
-│   ├── routes/
-│   │   ├── templates.py         # Template management API
-│   │   └── simulation.py        # Simulation execution API
-│   ├── services/
-│   │   ├── orchestrator.py      # Core topology execution engine
-│   │   ├── template_store.py    # File-based template persistence
-│   │   └── batch_processor.py   # Batch simulation logic
-│   ├── models.py                # Pydantic data models
-│   ├── main.py                  # FastAPI application entry point
-│   └── requirements.txt
-├── README.md
-└── LICENSE
+├── server/                      # Python FastAPI Backend
+│   ├── routes/                  # API Endpoints
+│   │   ├── templates.py         # Template CRUD Operations
+│   │   └── simulation.py        # Execution Triggers
+│   ├── services/                # Business Logic
+│   │   ├── orchestrator.py      # Async Graph Execution Engine
+│   │   ├── batch_processor.py   # Bulk File Processing
+│   │   └── template_store.py    # File-Based Persistence
+│   ├── data/                    # Local Storage
+│   │   └── templates/           # Saved JSON Templates
+│   └── ...
+└── README.md
 ```
 
-## Getting Started
+## 🚦 Getting Started
 
 ### Prerequisites
-
-- **Python** 3.11 or higher
-- **Node.js** 18.0.0 or higher
-- **npm** 9.0.0 or higher
-- **OpenAI API key** (or compatible endpoint like LocalAI/vLLM)
+- **Python** 3.11+
+- **Node.js** 18+ & **npm** 9+
+- **OpenAI API Key** (or compatible local endpoint)
 
 ### Installation
 
+1.  **Clone the repository**
+    ```bash
+    git clone https://github.com/KatherLab/agentdashboardpy.git
+    cd agentdashboardpy
+    ```
+
+2.  **Backend Setup**
+    ```bash
+    python -m venv venv
+    source venv/bin/activate  # Windows: venv\Scripts\activate
+    pip install -r server/requirements.txt
+    ```
+
+3.  **Frontend Setup**
+    ```bash
+    cd client
+    npm install
+    cd ..
+    ```
+
+### Running the Application
+
+Open two terminal windows:
+
+**Terminal 1: Backend**
 ```bash
-# Clone the repository
-git clone https://github.com/KatherLab/agentdashboardpy.git
-cd agentdashboardpy
-
-# Set up Python virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install Python dependencies
-pip install -r server/requirements.txt
-
-# Install frontend dependencies
-cd client
-npm install
-cd ..
-```
-
-### Development
-
-Run both the frontend dev server and backend in separate terminals:
-
-```bash
-# Terminal 1: Start the Python backend
 source venv/bin/activate
 uvicorn server.main:app --reload --port 3006
-# API Docs available at http://localhost:3006/docs
+# Swagger UI available at http://localhost:3006/docs
+```
 
-# Terminal 2: Start the frontend dev server
+**Terminal 2: Frontend**
+```bash
 cd client
 npm run dev
-# Client runs on http://localhost:5173 (proxies /api to :3006)
+# Dashboard accessible at http://localhost:5173
 ```
 
-### Production Build
+## 🔌 API Reference
 
-```bash
-# Build the frontend
-cd client
-npm run build
-cd ..
+### Simulation
+- `POST /api/simulate`: Trigger a single simulation run. Returns a streaming response (NDJSON).
 
-# Start the production server (serves built client)
-uvicorn server.main:app --host 0.0.0.0 --port 3006
-```
+### Templates
+- `GET /api/templates`: List all templates with summary metadata.
+- `GET /api/templates/{id}`: Retrieve full topology for a specific template.
+- `POST /api/templates`: Save or update a template.
+- `DELETE /api/templates/{id}`: Delete a template.
 
-## API Reference
-
-### POST /api/simulate
-Execute a simulation with an agent topology. Returns streaming NDJSON events.
-
-### POST /api/templates
-Save a new template to the library.
-
-### GET /api/templates
-List all available templates.
-
-## Agent Configuration
-
-| Property | Description | Options |
-|----------|-------------|---------|
-| **Behavior Preset** | Reasoning style | `analytical`, `creative`, `adversarial`, `balanced` |
-| **Model** | LLM model to use | Supported models (GPT-4o, Local GLM, etc.) |
-| **Temperature** | Response creativity | 0.0 - 2.0 |
-| **Oversight Mode** | Senior reviewer capability | Boolean |
-| **Suspicion Level** | Cross-checking behavior | `trusting`, `suspicious` |
-
-## License
+## 📄 License
 
 MIT License - see [LICENSE](LICENSE) for details.
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
-import { ChevronRight, FlaskConical, Star, Trash2, Edit2, Upload } from 'lucide-vue-next'
+import { ChevronRight, FlaskConical, Star, Trash2, Edit2, Upload, Cpu, FileUp } from 'lucide-vue-next'
 import { useTopology } from '../composables/useTopology'
 import { scenarios } from '../scenarios'
 import type { ScenarioCategory } from '../types'
@@ -39,6 +39,10 @@ interface TemplateMetadata {
   description?: string
   created_at: string
   updated_at: string
+  // Summary stats
+  agent_count?: number
+  model_summary?: string
+  input_summary?: string
 }
 const customTemplates = ref<TemplateMetadata[]>([])
 const loadingTemplates = ref(false)
@@ -269,6 +273,26 @@ defineExpose({ open })
             <div class="min-w-0 flex-1">
               <div class="font-medium text-xs text-gray-900">{{ template.name }}</div>
               <div class="text-[11px] text-gray-500 mt-0.5 truncate">{{ template.description || 'No description' }}</div>
+              
+              <!-- Stats Badges -->
+              <div class="flex items-center gap-2 mt-1.5 overflow-hidden">
+                <!-- Agent Count -->
+                <div v-if="template.agent_count !== undefined" class="flex items-center gap-1 bg-gray-100 px-1.5 py-0.5 rounded text-[10px] text-gray-600">
+                  <Cpu class="w-3 h-3 opacity-70 scale-90" v-if="false" />
+                  <span class="font-semibold text-xs">{{ template.agent_count }}</span>
+                  <span class="text-[9px] uppercase">Agents</span>
+                </div>
+                <!-- Model -->
+                <div v-if="template.model_summary" class="flex items-center gap-1 bg-blue-50 px-1.5 py-0.5 rounded text-[10px] text-blue-700 truncate max-w-[100px]" title="Global Model">
+                  <Cpu class="w-3 h-3 opacity-70" />
+                  <span class="truncate">{{ template.model_summary }}</span>
+                </div>
+                <!-- Inputs -->
+                <div v-if="template.input_summary" class="flex items-center gap-1 bg-green-50 px-1.5 py-0.5 rounded text-[10px] text-green-700 truncate max-w-[80px]" title="Inputs">
+                  <FileUp class="w-3 h-3 opacity-70" />
+                  <span class="truncate">{{ template.input_summary }}</span>
+                </div>
+              </div>
             </div>
             <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <button

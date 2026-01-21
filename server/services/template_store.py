@@ -15,6 +15,10 @@ class TemplateMetadata(BaseModel):
     description: Optional[str] = None
     created_at: str
     updated_at: str
+    # Summary stats
+    agent_count: Optional[int] = 0
+    model_summary: Optional[str] = None
+    input_summary: Optional[str] = None
 
 
 class Template(TemplateMetadata):
@@ -45,9 +49,13 @@ class TemplateStore:
                         name=data["name"],
                         description=data.get("description"),
                         created_at=data["created_at"],
-                        updated_at=data["updated_at"]
+                        updated_at=data["updated_at"],
+                        agent_count=data.get("agent_count", 0),
+                        model_summary=data.get("model_summary"),
+                        input_summary=data.get("input_summary")
                     ))
-            except (json.JSONDecodeError, KeyError):
+            except (json.JSONDecodeError, KeyError) as e:
+                # logger.warning(f"Skipping corrupt template {file}: {e}")
                 continue
         return sorted(templates, key=lambda t: t.updated_at, reverse=True)
     
@@ -83,13 +91,42 @@ class TemplateStore:
             template_id = str(uuid4())[:8]
             created_at = now
         
+        # Calculate summaries from topology
+        agent_nodes = topology.get("nodes", [])
+        agent_count = len(agent_nodes)
+        
+        global_settings = topology.get("globalSettings") or {}
+        # Handle case where globalSettings might be aliased in pydantic but we are dict access
+        if "global_settings" in topology and not global_settings:
+             global_settings = topology["global_settings"]
+             
+        model_summary = global_settings.get("model", "gpt-4o")
+        
+        input_nodes = topology.get("inputNodes") or topology.get("input_nodes", [])
+        input_count = len(input_nodes)
+        
+        if input_count == 0:
+            input_summary = "No Inputs"
+        elif input_count == 1:
+            input_summary = "1 Input"
+        else:
+            input_summary = f"{input_count} Inputs"
+        
+        # Refine input summary if possible (e.g. check for files)
+        file_inputs = [n for n in input_nodes if n.get("inputType") == "file" or n.get("filepath")]
+        if file_inputs:
+            input_summary += f" ({len(file_inputs)} Files)"
+
         template = Template(
             id=template_id,
             name=name,
             description=description,
             topology=topology,
             created_at=created_at,
-            updated_at=now
+            updated_at=now,
+            agent_count=agent_count,
+            model_summary=model_summary,
+            input_summary=input_summary
         )
         
         path = self._get_path(template_id)
