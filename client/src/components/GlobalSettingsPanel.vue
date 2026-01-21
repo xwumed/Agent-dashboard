@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Settings, Trash2, Cpu, Thermometer, Brain, Zap, List, Save, Download, FlaskConical, FileUp, Copy } from 'lucide-vue-next'
+import { Settings, Cpu, Thermometer, Brain, Zap, List, Save, Download, FlaskConical, FileUp, Copy } from 'lucide-vue-next'
 import { useTopology } from '../composables/useTopology'
 import BatchProcessingPanel from './BatchProcessingPanel.vue'
 
@@ -12,7 +12,6 @@ defineEmits<{
 }>()
 
 const { 
-  clearTopology,
   allAvailableModels,
   globalModel,
   setGlobalModel,
@@ -193,16 +192,10 @@ const {
       
     </div>
 
-    <!-- Footer Actions (Clear only) -->
-    <div class="p-4 border-t border-gray-100 bg-gray-50">
-      <button
-        @click="clearTopology"
-        class="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-white bg-red-500 hover:bg-red-600 rounded-md transition-colors shadow-sm"
-        title="Clear Canvas and Reset Settings"
-      >
-        <Trash2 class="w-3.5 h-3.5" />
-        Clear Canvas
-      </button>
+    <!-- Footer Branding -->
+    <div class="p-4 border-t border-gray-100 bg-gray-50 flex items-center justify-center gap-2 opacity-60 hover:opacity-100 transition-opacity">
+      <img src="https://jnkather.github.io/images/logo.png" class="h-6 w-6 object-contain" alt="Kather Lab" />
+      <span class="text-xs font-medium text-gray-500">Kather Lab</span>
     </div>
   </div>
 </template>

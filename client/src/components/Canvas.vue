@@ -8,7 +8,7 @@ import InputNode from './InputNode.vue'
 import OutputNode from './OutputNode.vue'
 import { useTopology } from '../composables/useTopology'
 import type { AgentNodeData, InputNodeData, OutputNodeData, RelationshipType } from '../types'
-import { FolderOpen } from 'lucide-vue-next'
+import { FolderOpen, Trash2 } from 'lucide-vue-next'
 
 const emit = defineEmits<{
   (e: 'load-scenario'): void
@@ -24,7 +24,8 @@ const {
   addInputNode,
   addOutputNode,
   addEdge,
-  removeEdge
+  removeEdge,
+  clearTopology
 } = useTopology()
 
 const { onConnect, onNodeDragStop, onPaneClick, fitView, onEdgesChange } = useVueFlow()
@@ -442,6 +443,17 @@ watch(isCanvasEmpty, (empty) => {
       </template>
       <Background pattern-color="#e5e7eb" :gap="24" :size="1" />
       <Controls position="bottom-left" />
+      
+      <!-- Clear Canvas Button (Custom) -->
+      <div class="absolute bottom-[15px] right-[15px] z-[5] pointer-events-auto">
+        <button
+          @click="clearTopology"
+          class="bg-white border border-gray-200 rounded-md shadow-sm p-1.5 text-gray-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-colors"
+          title="Clear Canvas"
+        >
+          <Trash2 class="w-4 h-4" />
+        </button>
+      </div>
     </VueFlow>
 
     <!-- Context Menu -->
