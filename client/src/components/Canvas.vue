@@ -165,9 +165,9 @@ function onDrop(event: DragEvent) {
 
   const newNode: AgentNodeData = {
     id: nodeId,
-    name: isOversight ? 'Oversight Agent' : 'New Agent',
+    name: 'New Agent',
     role: '',
-    behaviorPreset: isOversight ? 'analytical' : 'balanced',
+    behaviorPreset: 'analytical',
     temperature: 0.7,
     // model is no longer per-node, uses global model
     isOversight,
@@ -185,6 +185,71 @@ function onDragOver(event: DragEvent) {
   if (event.dataTransfer) {
     event.dataTransfer.dropEffect = 'move'
   }
+}
+
+// ------ Context Menu Logic ------
+const showContextMenu = ref(false)
+const contextMenuPosition = ref({ x: 0, y: 0, flowX: 0, flowY: 0 })
+const contextMenuRef = ref<HTMLElement | null>(null)
+
+// Handle global click to close context menu
+function onGlobalClick(event: MouseEvent) {
+  if (showContextMenu.value && contextMenuRef.value && !contextMenuRef.value.contains(event.target as Node)) {
+    showContextMenu.value = false
+  }
+}
+
+// Handle right-click on the canvas pane
+function onCanvasContextMenu(event: MouseEvent) {
+  event.preventDefault()
+  
+  // Get the canvas bounds to calculate relative position
+  const canvasElement = (event.currentTarget as HTMLElement).querySelector('.vue-flow__renderer') || event.currentTarget as HTMLElement;
+  const bounds = canvasElement.getBoundingClientRect();
+  
+  // Calculate position relative to the flow pane (for adding nodes)
+  // We need to account for zoom/pan if we want exact cursor position, 
+  // but for simplicity, placing it near the click in the view is fine.
+  // Using verify_project_or_zoom would be complex, so we'll approximate 
+  // by using the raw click for the menu UI, and project later if needed.
+  // Actually, VueFlow provides `project` utility if we extract it, 
+  // but let's just use the click position and let user organize.
+  // BETTER: Use `project` from `useVueFlow`
+  const { project } = useVueFlow()
+  const projection = project({ x: event.clientX - bounds.left, y: event.clientY - bounds.top })
+
+  contextMenuPosition.value = {
+    x: event.clientX,
+    y: event.clientY,
+    flowX: projection.x,
+    flowY: projection.y
+  }
+  showContextMenu.value = true
+}
+
+function addNodeFromContext(type: 'agent' | 'input' | 'output') {
+  const nodeId = crypto.randomUUID()
+  const position = { x: contextMenuPosition.value.flowX, y: contextMenuPosition.value.flowY }
+
+  if (type === 'input') {
+    addInputNode({ id: nodeId, type: 'input', task: '' })
+  } else if (type === 'output') {
+    addOutputNode({ id: nodeId, type: 'output', label: 'Final Output' })
+  } else {
+    addNode({
+      id: nodeId,
+      name: 'New Agent',
+      role: '',
+      behaviorPreset: 'analytical',
+      temperature: 0.7,
+      isOversight: false,
+      rogueMode: { enabled: false }
+    })
+  }
+  
+  nodePositions.value[nodeId] = position
+  selectNode(nodeId)
+  showContextMenu.value = false
 }
 
 function onNodeClick(event: { node: { id: string } }) {
@@ -348,12 +413,19 @@ watch(isCanvasEmpty, (empty) => {
 </script>
 
 <template>
-  <div class="flex-1 h-full relative" @drop="onDrop" @dragover="onDragOver">
+  <div 
+    class="flex-1 h-full relative" 
+    @drop="onDrop" 
+    @dragover="onDragOver"
+    @contextmenu="onCanvasContextMenu"
+    @click="onGlobalClick"
+  >
     <VueFlow
       :key="flowKey"
       :nodes="vueFlowNodes"
       :edges="vueFlowEdges"
       @node-click="onNodeClick"
+      @pane-click="selectNode(null)"
       :default-viewport="{ x: 0, y: 0, zoom: 0.8 }"
       :min-zoom="0.2"
       :max-zoom="2"
@@ -371,6 +443,37 @@ watch(isCanvasEmpty, (empty) => {
       <Background pattern-color="#e5e7eb" :gap="24" :size="1" />
       <Controls position="bottom-left" />
     </VueFlow>
+
+    <!-- Context Menu -->
+    <div
+      v-if="showContextMenu"
+      ref="contextMenuRef"
+      class="absolute z-50 bg-white rounded-lg shadow-xl border border-gray-200 py-1 min-w-[160px]"
+      :style="{ left: `${contextMenuPosition.x}px`, top: `${contextMenuPosition.y}px` }"
+    >
+      <button
+        @click="addNodeFromContext('agent')"
+        class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary-600 flex items-center gap-2"
+      >
+        <div class="w-2 h-2 rounded-full bg-blue-500"></div>
+        Add Agent
+      </button>
+      <div class="h-px bg-gray-100 my-1"></div>
+      <button
+        @click="addNodeFromContext('input')"
+        class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary-600 flex items-center gap-2"
+      >
+        <div class="w-2 h-2 rounded-full bg-primary-500"></div>
+        Add Input Node
+      </button>
+      <button
+        @click="addNodeFromContext('output')"
+        class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary-600 flex items-center gap-2"
+      >
+        <div class="w-2 h-2 rounded-full bg-green-500"></div>
+        Add Output Node
+      </button>
+    </div>
 
     <!-- Empty state overlay -->
     <div

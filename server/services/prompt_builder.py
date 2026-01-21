@@ -129,35 +129,34 @@ def build_prompt(node: AgentNodeData, incoming_context: Optional[list[IncomingCo
     """Build the system prompt for an agent based on its configuration"""
     incoming_context = incoming_context or []
 
-    # If custom system prompt is provided, use it
-    if node.system_prompt and node.system_prompt.strip():
-        prompt = node.system_prompt
-        if node.rogue_mode.enabled and node.rogue_mode.profile:
-            prompt += "\n" + get_rogue_instructions(node.rogue_mode.profile)
-        return prompt
-
-    # Build prompt from components
+    # 1. Base Identity (Name + Role) - Always included
     prompt = f"You are {node.name}.\n\n"
-
     if node.role:
         prompt += f"{node.role}\n\n"
 
-    # Behavior preset modifiers
-    prompt += get_behavior_modifier(node.behavior_preset)
+    # 2. Instructions Layer (Custom OR Preset)
+    if node.system_prompt and node.system_prompt.strip():
+        # Use custom prompt as the instruction layer
+        prompt += node.system_prompt + "\n\n"
+    else:
+        # Use behavior preset as the instruction layer
+        prompt += get_behavior_modifier(node.behavior_preset)
 
-    # Oversight agent instructions
+    # 3. Oversight Layer
     if node.is_oversight:
         prompt += get_oversight_instructions(node.suspicion_level)
 
-    # Rogue mode instructions (if enabled)
+    # 4. Rogue Mode Layer
     if node.rogue_mode.enabled and node.rogue_mode.profile:
         prompt += get_rogue_instructions(node.rogue_mode.profile)
 
-    # Context awareness
+    # 5. Context Layer
     if incoming_context:
         prompt += f"\nYou will receive inputs from {len(incoming_context)} other agent(s). Consider their perspectives carefully in forming your response.\n"
 
-    # Output format guidance
+    # 6. Output Guidance (only added if no custom prompt, or if we want to enforce structure?)
+    # Let's add it unless custom prompt is very specific. 
+    # For now, append it to ensure consistent format for dashboard parsing if needed.
     prompt += "\nProvide a clear, well-structured response. Use headings and bullet points where appropriate for clarity."
 
     return prompt

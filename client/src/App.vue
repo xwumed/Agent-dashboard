@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { Settings, Play, Info, CheckCircle, XCircle, Square, Save, X, Download } from 'lucide-vue-next'
+import { Settings, Play, Info, CheckCircle, XCircle, Square, X } from 'lucide-vue-next'
 import Canvas from './components/Canvas.vue'
-import AgentPalette from './components/AgentPalette.vue'
+import GlobalSettingsPanel from './components/GlobalSettingsPanel.vue'
 import PropertiesPanel from './components/PropertiesPanel.vue'
 import SettingsModal from './components/SettingsModal.vue'
 import OutputDrawer from './components/OutputDrawer.vue'
@@ -19,21 +19,23 @@ const {
   selectedNode,
   globalModel,
   globalTemperature,
-  globalBehaviorPreset,
-  allAvailableModels,
+  globalMaxTokens,
+  globalReasoningEffort,
+  globalThinking,
   endpointConfigs,
-  setGlobalModel,
-  setGlobalTemperature,
-  setGlobalBehaviorPreset,
+  currentTemplateId,
   exportTopology,
-  importTopology,
   setSimulationResults,
   createAbortController,
   abortSimulation,
   setProcessingNodes,
   markNodeComplete,
   clearProcessingNodes,
-  updateNodeResult
+  updateNodeResult,
+  importTopology,
+  currentTemplateName,
+  topologyName,
+  topologyDescription
 } = useTopology()
 
 const showSettings = ref(false)
@@ -43,17 +45,28 @@ const showSaveTemplateModal = ref(false)
 const templateName = ref('')
 const templateDescription = ref('')
 const savingTemplate = ref(false)
+const saveSuccessMessage = ref<string | null>(null)
 const simulationError = ref<string | null>(null)
 const simulationSuccess = ref<{ agentCount: number; totalTime: number } | null>(null)
 const scenarioLoaderRef = ref<InstanceType<typeof ScenarioLoader> | null>(null)
 
-async function saveTemplate() {
+async function saveTemplate(overwrite: boolean = false) {
   if (!templateName.value.trim()) return
   savingTemplate.value = true
   try {
+    // Ensure the topology object we save has the new name/description
     const topology = exportTopology()
-    await fetch('/api/templates', {
-      method: 'POST',
+    topology.name = templateName.value
+    topology.description = templateDescription.value || undefined
+    
+    const isOverwrite = overwrite && currentTemplateId.value
+    
+    const url = isOverwrite 
+      ? `/api/templates/${currentTemplateId.value}` 
+      : '/api/templates'
+    
+    const response = await fetch(url, {
+      method: isOverwrite ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: templateName.value,
@@ -61,17 +74,67 @@ async function saveTemplate() {
         topology
       })
     })
+
+    if (!response.ok) {
+      throw new Error('Failed to save template')
+    }
+
+    const savedTemplate = await response.json()
+    
+    // Update local state to reflect the saved template
+    currentTemplateId.value = savedTemplate.id
+    currentTemplateName.value = savedTemplate.name
+    topologyName.value = savedTemplate.name
+    topologyDescription.value = savedTemplate.description || ''
+    
     showSaveTemplateModal.value = false
+    // Restore clean state
     templateName.value = ''
     templateDescription.value = ''
-    simulationSuccess.value = { agentCount: 0, totalTime: 0 }
-    setTimeout(() => simulationSuccess.value = null, 2000)
+    saveSuccessMessage.value = 'Template saved successfully to library'
+    setTimeout(() => saveSuccessMessage.value = null, 3000)
   } catch (err) {
     simulationError.value = 'Failed to save template'
     setTimeout(() => simulationError.value = null, 3000)
   } finally {
     savingTemplate.value = false
   }
+}
+
+function handleQuickSave() {
+  if (currentTemplateId.value) {
+    // Overwrite existing
+    templateName.value = currentTemplateName.value || 'Untitled'
+    saveTemplate(true)
+  } else {
+    // New template (Same as Save As)
+    handleSaveAs()
+  }
+}
+
+function handleSaveAs() {
+  templateName.value = ''
+  templateDescription.value = ''
+  showSaveTemplateModal.value = true
+}
+
+function handleImport() {
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = '.json'
+  input.onchange = async (e) => {
+    const file = (e.target as HTMLInputElement).files?.[0]
+    if (!file) return
+    const text = await file.text()
+    try {
+      const json = JSON.parse(text)
+      importTopology(json)
+    } catch (err) {
+      console.error('Failed to import topology', err)
+      alert('Failed to import topology: Invalid JSON')
+    }
+  }
+  input.click()
 }
 
 function openScenarioLoader() {
@@ -108,7 +171,9 @@ async function runSimulation() {
         apiEndpoint: apiEndpoint.value,
         globalModel: globalModel.value,
         globalTemperature: globalTemperature.value,
-        globalBehaviorPreset: globalBehaviorPreset.value,
+        globalMaxTokens: globalMaxTokens.value,
+        globalReasoningEffort: globalReasoningEffort.value,
+        globalThinking: globalThinking.value,
         // Send endpoint configs for auto endpoint selection based on model
         endpointConfigs: endpointConfigs.value.map(c => ({
           id: c.id,
@@ -230,25 +295,7 @@ function handleExport() {
   URL.revokeObjectURL(url)
 }
 
-function handleImport() {
-  const input = document.createElement('input')
-  input.type = 'file'
-  input.accept = '.json'
-  input.onchange = async (e) => {
-    const file = (e.target as HTMLInputElement).files?.[0]
-    if (!file) return
 
-    try {
-      const text = await file.text()
-      const topology = JSON.parse(text)
-      importTopology(topology)
-    } catch (err) {
-      simulationError.value = 'Invalid topology file'
-      setTimeout(() => simulationError.value = null, 3000)
-    }
-  }
-  input.click()
-}
 
 function toggleOutput() {
   if (selectedNode.value) {
@@ -273,13 +320,21 @@ function toggleOutput() {
           </svg>
         </div>
         <div>
-          <h1 class="text-sm font-semibold text-gray-900 tracking-tight">Agent Dashboard</h1>
-          <p class="text-xs text-gray-500">Multi-agent orchestration sandbox</p>
+          <h1 class="text-sm font-semibold text-gray-900 tracking-tight">{{ topologyName || 'Agent Dashboard' }}</h1>
+          <p class="text-xs text-gray-500 truncate max-w-md" :title="topologyDescription">{{ topologyDescription || 'Multi-agent orchestration sandbox' }}</p>
         </div>
       </div>
 
       <div class="flex items-center gap-2">
         <!-- Success toast -->
+        <div
+          v-if="saveSuccessMessage"
+          class="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-md animate-fade-in"
+        >
+          <CheckCircle class="w-4 h-4" />
+          <span>{{ saveSuccessMessage }}</span>
+        </div>
+
         <div
           v-if="simulationSuccess"
           class="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-md animate-fade-in"
@@ -297,76 +352,9 @@ function toggleOutput() {
           {{ simulationError }}
         </div>
 
-        <!-- GROUP 1: Model Configuration -->
-        <div class="flex items-center gap-4 px-4 py-2 bg-gradient-to-r from-gray-50 to-white rounded-lg border border-gray-200 shadow-sm">
-          <div class="flex items-center gap-2">
-            <span class="text-sm font-semibold text-gray-600">Model</span>
-            <select
-              :value="globalModel"
-              @change="setGlobalModel(($event.target as HTMLSelectElement).value as any)"
-              class="text-sm font-medium text-gray-800 bg-white border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary-500 cursor-pointer"
-            >
-              <option v-for="model in allAvailableModels" :key="model" :value="model">
-                {{ model }}
-              </option>
-              <!-- Fallback if no models configured -->
-              <option v-if="allAvailableModels.length === 0" value="gpt-4o">gpt-4o</option>
-            </select>
-          </div>
-          <div class="h-6 w-px bg-gray-300"></div>
-          <div class="flex items-center gap-2">
-            <span class="text-sm font-semibold text-gray-600">Preset</span>
-            <select
-              :value="globalBehaviorPreset"
-              @change="setGlobalBehaviorPreset(($event.target as HTMLSelectElement).value)"
-              class="text-sm font-medium text-gray-800 bg-white border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary-500 cursor-pointer"
-            >
-              <option value="analytical">Analytical</option>
-              <option value="creative">Creative</option>
-              <option value="adversarial">Adversarial</option>
-              <option value="balanced">Balanced</option>
-            </select>
-          </div>
-          <div class="h-6 w-px bg-gray-300"></div>
-          <div class="flex items-center gap-2">
-            <span class="text-sm font-semibold text-gray-600">Temp</span>
-            <input
-              type="number"
-              :value="globalTemperature"
-              @change="setGlobalTemperature(parseFloat(($event.target as HTMLInputElement).value))"
-              min="0"
-              max="2"
-              step="0.1"
-              class="w-14 text-sm font-medium text-gray-800 bg-white border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary-500 text-center"
-            />
-          </div>
-        </div>
 
-        <!-- Separator -->
-        <div class="h-8 w-px bg-gray-200"></div>
 
-        <!-- GROUP 2: Project Actions -->
-        <div class="flex items-center gap-2">
-          <button
-            @click="showSaveTemplateModal = true"
-            class="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm"
-            title="Save current topology as template"
-          >
-            <Save class="w-4 h-4" />
-            Save
-          </button>
-          <button
-            @click="handleExport"
-            class="flex items-center justify-center w-9 h-9 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-            title="Download JSON"
-          >
-            <Download class="w-4 h-4" />
-          </button>
-          <ScenarioLoader ref="scenarioLoaderRef" />
-        </div>
 
-        <!-- Separator -->
-        <div class="h-8 w-px bg-gray-200"></div>
 
         <!-- GROUP 3: Settings & Run -->
         <div class="flex items-center gap-1">
@@ -408,8 +396,14 @@ function toggleOutput() {
 
     <!-- Main content -->
     <div class="flex-1 flex overflow-hidden">
-      <!-- Left: Palette -->
-      <AgentPalette @import="handleImport" @export="handleExport" />
+      <!-- Left: Global Settings -->
+      <GlobalSettingsPanel 
+        @save-template="handleQuickSave"
+        @save-as-template="handleSaveAs"
+        @open-loader="openScenarioLoader"
+        @export-json="handleExport"
+        @import-template="handleImport"
+      />
 
       <!-- Center: Canvas -->
       <Canvas @node-click="toggleOutput" @load-scenario="openScenarioLoader" />
@@ -422,6 +416,7 @@ function toggleOutput() {
     <SettingsModal :open="showSettings" @close="showSettings = false" />
     <OutputDrawer :open="showOutput" @close="showOutput = false" />
     <AboutModal :open="showAbout" @close="showAbout = false" />
+    <ScenarioLoader ref="scenarioLoaderRef" />
 
     <!-- Save Template Modal -->
     <div v-if="showSaveTemplateModal" class="fixed inset-0 z-50 flex items-center justify-center">
@@ -461,11 +456,11 @@ function toggleOutput() {
               Cancel
             </button>
             <button
-              @click="saveTemplate"
+              @click="saveTemplate(false)"
               :disabled="!templateName.trim() || savingTemplate"
               class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {{ savingTemplate ? 'Saving...' : 'Save Template' }}
+              {{ savingTemplate ? 'Saving...' : 'Save' }}
             </button>
           </div>
         </div>

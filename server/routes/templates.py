@@ -47,11 +47,24 @@ async def save_template(request: SaveTemplateRequest) -> Template:
 class UpdateTemplateRequest(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
+    topology: Optional[dict] = None
 
 
 @router.put("/templates/{template_id}")
 async def update_template(template_id: str, request: UpdateTemplateRequest) -> Template:
-    """PUT /api/templates/{id} - Update template metadata"""
+    """PUT /api/templates/{id} - Update template metadata and topology"""
+    # Debug logging
+    try:
+        with open("debug_template_put.log", "a") as f:
+            f.write(f"Update request for {template_id}\n")
+            f.write(f"Has topology: {request.topology is not None}\n")
+            if request.topology:
+                f.write(f"Topology keys: {list(request.topology.keys())}\n")
+                if 'inputNodes' in request.topology:
+                   f.write(f"Input nodes: {request.topology['inputNodes']}\n")
+    except Exception as e:
+        logger.error(f"Debug log failed: {e}")
+
     existing = template_store.get_template(template_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Template not found")
@@ -59,7 +72,7 @@ async def update_template(template_id: str, request: UpdateTemplateRequest) -> T
     # Update with new values or keep existing
     return template_store.save_template(
         name=request.name or existing.name,
-        topology=existing.topology,
+        topology=request.topology or existing.topology,
         description=request.description if request.description is not None else existing.description,
         template_id=template_id
     )

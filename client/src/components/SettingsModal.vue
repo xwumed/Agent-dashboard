@@ -21,6 +21,7 @@ const {
 // Local copy for editing
 const localConfigs = ref<Array<{
   id: string
+  category: 'chat' | 'embedding' | 'reranker'
   label: string
   apiKey: string
   endpoint: string
@@ -33,6 +34,9 @@ const testMessage = ref<Record<string, string>>({})
 
 // Track availability status for each model: { "endpointId:modelName": true/false/undefined }
 const modelStatus = ref<Record<string, boolean | undefined>>({})
+
+// Store fetched models for each endpoint (for dropdown selection)
+const fetchedModels = ref<Record<string, string[]>>({})
 
 onMounted(() => {
   loadConfigs()
@@ -89,15 +93,18 @@ async function fetchModels(configId: string) {
     const result = await response.json()
     
     if (result.success && result.models.length > 0) {
-      // Replace existing models with fetched ones
-      config.models = result.models
+      // Store fetched models for dropdown selection (exclude already added ones)
+      const existingModels = new Set(config.models)
+      fetchedModels.value[configId] = result.models.filter((m: string) => !existingModels.has(m))
       testStatus.value[configId] = 'success'
-      testMessage.value[configId] = `✓ ${result.message}`
+      testMessage.value[configId] = `✓ Found ${result.models.length} models`
     } else {
+      fetchedModels.value[configId] = []
       testStatus.value[configId] = 'error'
       testMessage.value[configId] = `✗ ${result.message}`
     }
   } catch (e) {
+    fetchedModels.value[configId] = []
     testStatus.value[configId] = 'error'
     testMessage.value[configId] = '✗ Failed to fetch models'
   }
@@ -105,6 +112,19 @@ async function fetchModels(configId: string) {
   setTimeout(() => {
     testStatus.value[configId] = 'idle'
   }, 5000)
+}
+
+// Add a model from the fetched dropdown
+function addFetchedModel(configId: string, model: string) {
+  const config = localConfigs.value.find(c => c.id === configId)
+  if (config && model && !config.models.includes(model)) {
+    config.models.push(model)
+    // Remove from dropdown
+    const idx = fetchedModels.value[configId]?.indexOf(model)
+    if (idx !== undefined && idx >= 0) {
+      fetchedModels.value[configId].splice(idx, 1)
+    }
+  }
 }
 
 async function testConnection(configId: string) {
@@ -210,106 +230,274 @@ function save() {
           </button>
         </div>
 
-        <!-- Endpoint Configs -->
-        <div class="space-y-4">
-          <div
-            v-for="config in localConfigs"
-            :key="config.id"
-            class="border border-gray-200 rounded-lg p-4"
-          >
-            <!-- Endpoint Header -->
-            <div class="flex items-center justify-between mb-3">
-              <h3 class="text-sm font-semibold text-gray-900">{{ config.label }}</h3>
-              <div class="flex items-center gap-2">
-                <span 
-                  v-if="testStatus[config.id] !== 'idle'"
-                  class="text-xs"
-                  :class="{
-                    'text-blue-600': testStatus[config.id] === 'testing',
-                    'text-green-600': testStatus[config.id] === 'success',
-                    'text-red-600': testStatus[config.id] === 'error'
-                  }"
-                >
-                  {{ testMessage[config.id] }}
-                </span>
-                <button
-                  @click="fetchModels(config.id)"
-                  :disabled="testStatus[config.id] === 'testing'"
-                  class="px-2 py-1 text-xs text-green-600 border border-green-200 rounded hover:bg-green-50 disabled:opacity-50"
-                >
-                  Fetch
-                </button>
-                <button
-                  @click="testConnection(config.id)"
-                  :disabled="testStatus[config.id] === 'testing'"
-                  class="px-2 py-1 text-xs text-blue-600 border border-blue-200 rounded hover:bg-blue-50 disabled:opacity-50"
-                >
-                  Test
-                </button>
+        <!-- Endpoint Configs by Category -->
+        <div class="space-y-6">
+          <!-- Chat Models Section -->
+          <div>
+            <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">🤖 Chat Models</h3>
+            <div class="space-y-3">
+              <div
+                v-for="config in localConfigs.filter(c => c.category === 'chat')"
+                :key="config.id"
+                class="border border-gray-200 rounded-lg p-4"
+              >
+                <!-- Endpoint Header -->
+                <div class="flex items-center justify-between mb-3">
+                  <h3 class="text-sm font-semibold text-gray-900">{{ config.label }}</h3>
+                  <div class="flex items-center gap-2">
+                    <span 
+                      v-if="testStatus[config.id] !== 'idle'"
+                      class="text-xs"
+                      :class="{
+                        'text-blue-600': testStatus[config.id] === 'testing',
+                        'text-green-600': testStatus[config.id] === 'success',
+                        'text-red-600': testStatus[config.id] === 'error'
+                      }"
+                    >
+                      {{ testMessage[config.id] }}
+                    </span>
+                    <button
+                      @click="fetchModels(config.id)"
+                      :disabled="testStatus[config.id] === 'testing'"
+                      class="px-2 py-1 text-xs text-green-600 border border-green-200 rounded hover:bg-green-50 disabled:opacity-50"
+                    >
+                      Fetch
+                    </button>
+                    <button
+                      @click="testConnection(config.id)"
+                      :disabled="testStatus[config.id] === 'testing'"
+                      class="px-2 py-1 text-xs text-blue-600 border border-blue-200 rounded hover:bg-blue-50 disabled:opacity-50"
+                    >
+                      Test
+                    </button>
+                  </div>
+                </div>
+
+                <!-- API Key -->
+                <div class="mb-3">
+                  <label class="block text-xs text-gray-500 mb-1">
+                    <Key class="w-3 h-3 inline mr-1" />API Key
+                  </label>
+                  <input
+                    v-model="config.apiKey"
+                    type="password"
+                    class="w-full px-3 py-1.5 text-sm bg-gray-50 border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-gray-900"
+                    placeholder="sk-..."
+                  />
+                </div>
+
+                <!-- Endpoint URL -->
+                <div class="mb-3">
+                  <label class="block text-xs text-gray-500 mb-1">
+                    <Globe class="w-3 h-3 inline mr-1" />Endpoint
+                  </label>
+                  <input
+                    v-model="config.endpoint"
+                    type="text"
+                    class="w-full px-3 py-1.5 text-sm bg-gray-50 border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-gray-900"
+                  />
+                </div>
+
+                <!-- Models -->
+                <div>
+                  <label class="block text-xs text-gray-500 mb-1">Available Models</label>
+                  <div class="flex flex-wrap gap-1 mb-2">
+                    <span
+                      v-for="(model, idx) in config.models"
+                      :key="model"
+                      class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full"
+                      :class="{
+                        'bg-green-100 text-green-800': modelStatus[`${config.id}:${model}`] === true,
+                        'bg-red-100 text-red-800': modelStatus[`${config.id}:${model}`] === false,
+                        'bg-gray-100 text-gray-800': modelStatus[`${config.id}:${model}`] === undefined
+                      }"
+                    >
+                      <span v-if="modelStatus[`${config.id}:${model}`] === true" class="text-green-600">✓</span>
+                      <span v-else-if="modelStatus[`${config.id}:${model}`] === false" class="text-red-600">✗</span>
+                      {{ model }}
+                      <button @click="removeModel(config.id, idx)" class="text-gray-400 hover:text-red-500">
+                        <X class="w-3 h-3" />
+                      </button>
+                    </span>
+                  </div>
+                  <div class="flex gap-1">
+                    <!-- Dropdown for fetched models -->
+                    <select
+                      v-if="fetchedModels[config.id]?.length > 0"
+                      @change="addFetchedModel(config.id, ($event.target as HTMLSelectElement).value); ($event.target as HTMLSelectElement).value = ''"
+                      class="flex-1 px-2 py-1 text-xs bg-gray-50 border border-gray-200 rounded"
+                    >
+                      <option value="">Select from fetched models...</option>
+                      <option v-for="m in fetchedModels[config.id]" :key="m" :value="m">{{ m }}</option>
+                    </select>
+                    <!-- Manual input -->
+                    <input
+                      v-else
+                      v-model="config.newModel"
+                      @keydown.enter="addModel(config.id)"
+                      type="text"
+                      class="flex-1 px-2 py-1 text-xs bg-gray-50 border border-gray-200 rounded"
+                      placeholder="Add model name..."
+                    />
+                    <button
+                      @click="addModel(config.id)"
+                      class="p-1 text-gray-600 hover:text-gray-900"
+                      title="Add manual model"
+                    >
+                      <Plus class="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
+          </div>
 
-            <!-- API Key -->
-            <div class="mb-3">
-              <label class="block text-xs text-gray-500 mb-1">
-                <Key class="w-3 h-3 inline mr-1" />API Key
-              </label>
-              <input
-                v-model="config.apiKey"
-                type="password"
-                class="w-full px-3 py-1.5 text-sm bg-gray-50 border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-gray-900"
-                placeholder="sk-..."
-              />
-            </div>
-
-            <!-- Endpoint URL -->
-            <div class="mb-3">
-              <label class="block text-xs text-gray-500 mb-1">
-                <Globe class="w-3 h-3 inline mr-1" />Endpoint
-              </label>
-              <input
-                v-model="config.endpoint"
-                type="text"
-                class="w-full px-3 py-1.5 text-sm bg-gray-50 border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-gray-900"
-              />
-            </div>
-
-            <!-- Models -->
-            <div>
-              <label class="block text-xs text-gray-500 mb-1">Available Models</label>
-              <div class="flex flex-wrap gap-1 mb-2">
-                <span
-                  v-for="(model, idx) in config.models"
-                  :key="model"
-                  class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full"
-                  :class="{
-                    'bg-green-100 text-green-800': modelStatus[`${config.id}:${model}`] === true,
-                    'bg-red-100 text-red-800': modelStatus[`${config.id}:${model}`] === false,
-                    'bg-gray-100 text-gray-800': modelStatus[`${config.id}:${model}`] === undefined
-                  }"
-                >
-                  <span v-if="modelStatus[`${config.id}:${model}`] === true" class="text-green-600">✓</span>
-                  <span v-else-if="modelStatus[`${config.id}:${model}`] === false" class="text-red-600">✗</span>
-                  {{ model }}
-                  <button @click="removeModel(config.id, idx)" class="text-gray-400 hover:text-red-500">
-                    <X class="w-3 h-3" />
-                  </button>
-                </span>
+          <!-- Embedding Models Section -->
+          <div>
+            <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">📊 Embedding Models</h3>
+            <div class="space-y-3">
+              <div
+                v-for="config in localConfigs.filter(c => c.category === 'embedding')"
+                :key="config.id"
+                class="border border-gray-200 rounded-lg p-4"
+              >
+                <div class="flex items-center justify-between mb-3">
+                  <h3 class="text-sm font-semibold text-gray-900">{{ config.label }}</h3>
+                  <div class="flex items-center gap-2">
+                    <span v-if="testStatus[config.id] !== 'idle'" class="text-xs" :class="{'text-blue-600': testStatus[config.id] === 'testing', 'text-green-600': testStatus[config.id] === 'success', 'text-red-600': testStatus[config.id] === 'error'}">{{ testMessage[config.id] }}</span>
+                    <button @click="fetchModels(config.id)" :disabled="testStatus[config.id] === 'testing'" class="px-2 py-1 text-xs text-green-600 border border-green-200 rounded hover:bg-green-50 disabled:opacity-50">Fetch</button>
+                  </div>
+                </div>
+                <div class="mb-3">
+                  <label class="block text-xs text-gray-500 mb-1">API Key</label>
+                  <input v-model="config.apiKey" type="password" class="w-full px-3 py-1.5 text-sm bg-gray-50 border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-gray-900" placeholder="sk-..." />
+                </div>
+                <div class="mb-3">
+                  <label class="block text-xs text-gray-500 mb-1">Endpoint URL</label>
+                  <input v-model="config.endpoint" type="text" class="w-full px-3 py-1.5 text-sm bg-gray-50 border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-gray-900" />
+                </div>
+                <div>
+                  <label class="block text-xs text-gray-500 mb-1">Models</label>
+                  <div class="flex flex-wrap gap-1 mb-2">
+                    <span
+                      v-for="(model, idx) in config.models"
+                      :key="model"
+                      class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full"
+                      :class="{
+                        'bg-green-100 text-green-800': modelStatus[`${config.id}:${model}`] === true,
+                        'bg-red-100 text-red-800': modelStatus[`${config.id}:${model}`] === false,
+                        'bg-gray-100 text-gray-800': modelStatus[`${config.id}:${model}`] === undefined
+                      }"
+                    >
+                      <span v-if="modelStatus[`${config.id}:${model}`] === true" class="text-green-600">✓</span>
+                      <span v-else-if="modelStatus[`${config.id}:${model}`] === false" class="text-red-600">✗</span>
+                      {{ model }}
+                      <button @click="removeModel(config.id, idx)" class="text-gray-400 hover:text-red-500">
+                        <X class="w-3 h-3" />
+                      </button>
+                    </span>
+                  </div>
+                  <div class="flex gap-1">
+                    <select
+                      v-if="fetchedModels[config.id]?.length > 0"
+                      @change="addFetchedModel(config.id, ($event.target as HTMLSelectElement).value); ($event.target as HTMLSelectElement).value = ''"
+                      class="flex-1 px-2 py-1 text-xs bg-gray-50 border border-gray-200 rounded"
+                    >
+                      <option value="">Select from fetched models...</option>
+                      <option v-for="m in fetchedModels[config.id]" :key="m" :value="m">{{ m }}</option>
+                    </select>
+                    <input
+                      v-else
+                      v-model="config.newModel"
+                      @keydown.enter="addModel(config.id)"
+                      type="text"
+                      class="flex-1 px-2 py-1 text-xs bg-gray-50 border border-gray-200 rounded"
+                      placeholder="Add model name..."
+                    />
+                    <button
+                      @click="addModel(config.id)"
+                      class="p-1 text-gray-600 hover:text-gray-900"
+                      title="Add manual model"
+                    >
+                      <Plus class="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
               </div>
-              <div class="flex gap-1">
-                <input
-                  v-model="config.newModel"
-                  @keydown.enter="addModel(config.id)"
-                  type="text"
-                  class="flex-1 px-2 py-1 text-xs bg-gray-50 border border-gray-200 rounded"
-                  placeholder="Add model name..."
-                />
-                <button
-                  @click="addModel(config.id)"
-                  class="p-1 text-gray-600 hover:text-gray-900"
-                >
-                  <Plus class="w-4 h-4" />
-                </button>
+            </div>
+          </div>
+
+          <!-- Reranker Models Section -->
+          <div>
+            <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">🔄 Reranker Models</h3>
+            <div class="space-y-3">
+              <div
+                v-for="config in localConfigs.filter(c => c.category === 'reranker')"
+                :key="config.id"
+                class="border border-gray-200 rounded-lg p-4"
+              >
+                <div class="flex items-center justify-between mb-3">
+                  <h3 class="text-sm font-semibold text-gray-900">{{ config.label }}</h3>
+                  <div class="flex items-center gap-2">
+                    <span v-if="testStatus[config.id] !== 'idle'" class="text-xs" :class="{'text-blue-600': testStatus[config.id] === 'testing', 'text-green-600': testStatus[config.id] === 'success', 'text-red-600': testStatus[config.id] === 'error'}">{{ testMessage[config.id] }}</span>
+                    <button @click="fetchModels(config.id)" :disabled="testStatus[config.id] === 'testing'" class="px-2 py-1 text-xs text-green-600 border border-green-200 rounded hover:bg-green-50 disabled:opacity-50">Fetch</button>
+                  </div>
+                </div>
+                <div class="mb-3">
+                  <label class="block text-xs text-gray-500 mb-1">API Key</label>
+                  <input v-model="config.apiKey" type="password" class="w-full px-3 py-1.5 text-sm bg-gray-50 border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-gray-900" placeholder="sk-..." />
+                </div>
+                <div class="mb-3">
+                  <label class="block text-xs text-gray-500 mb-1">Endpoint URL</label>
+                  <input v-model="config.endpoint" type="text" class="w-full px-3 py-1.5 text-sm bg-gray-50 border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-gray-900" />
+                </div>
+                <div>
+                  <label class="block text-xs text-gray-500 mb-1">Models</label>
+                  <div class="flex flex-wrap gap-1 mb-2">
+                    <span
+                      v-for="(model, idx) in config.models"
+                      :key="model"
+                      class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full"
+                      :class="{
+                        'bg-green-100 text-green-800': modelStatus[`${config.id}:${model}`] === true,
+                        'bg-red-100 text-red-800': modelStatus[`${config.id}:${model}`] === false,
+                        'bg-gray-100 text-gray-800': modelStatus[`${config.id}:${model}`] === undefined
+                      }"
+                    >
+                      <span v-if="modelStatus[`${config.id}:${model}`] === true" class="text-green-600">✓</span>
+                      <span v-else-if="modelStatus[`${config.id}:${model}`] === false" class="text-red-600">✗</span>
+                      {{ model }}
+                      <button @click="removeModel(config.id, idx)" class="text-gray-400 hover:text-red-500">
+                        <X class="w-3 h-3" />
+                      </button>
+                    </span>
+                  </div>
+                  <div class="flex gap-1">
+                    <select
+                      v-if="fetchedModels[config.id]?.length > 0"
+                      @change="addFetchedModel(config.id, ($event.target as HTMLSelectElement).value); ($event.target as HTMLSelectElement).value = ''"
+                      class="flex-1 px-2 py-1 text-xs bg-gray-50 border border-gray-200 rounded"
+                    >
+                      <option value="">Select from fetched models...</option>
+                      <option v-for="m in fetchedModels[config.id]" :key="m" :value="m">{{ m }}</option>
+                    </select>
+                    <input
+                      v-else
+                      v-model="config.newModel"
+                      @keydown.enter="addModel(config.id)"
+                      type="text"
+                      class="flex-1 px-2 py-1 text-xs bg-gray-50 border border-gray-200 rounded"
+                      placeholder="Add model name..."
+                    />
+                    <button
+                      @click="addModel(config.id)"
+                      class="p-1 text-gray-600 hover:text-gray-900"
+                      title="Add manual model"
+                    >
+                      <Plus class="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -317,7 +505,7 @@ function save() {
 
         <!-- Info -->
         <div class="mt-4 p-3 bg-gray-50 rounded-lg text-xs text-gray-600">
-          Models added here will appear in the global model selector at the top toolbar.
+          <strong>Chat Models</strong> are used for Agent conversations. <strong>Embedding</strong> and <strong>Reranker</strong> are used for RAG tools.
         </div>
 
         <!-- Footer -->

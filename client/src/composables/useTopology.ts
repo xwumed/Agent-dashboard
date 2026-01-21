@@ -11,9 +11,12 @@ const selectedNodeId = ref<string | null>(null)
 const simulationResults = ref<Record<string, SimulationResult>>({})
 const isSimulating = ref(false)
 
-// Multi-endpoint API configuration
+// Multi-endpoint API configuration by category
+type EndpointCategory = 'chat' | 'embedding' | 'reranker'
+
 interface EndpointConfig {
   id: string
+  category: EndpointCategory
   label: string
   apiKey: string
   endpoint: string
@@ -21,9 +24,13 @@ interface EndpointConfig {
 }
 
 const defaultEndpointConfigs: EndpointConfig[] = [
-  { id: 'openai', label: 'OpenAI', apiKey: '', endpoint: 'https://api.openai.com/v1', models: ['gpt-4o', 'gpt-5.2'] },
-  { id: 'local', label: 'Local LLM', apiKey: 'EMPTY', endpoint: 'http://localhost:11434/v1', models: ['GPT-OSS-120B', 'GLM-4.7-FP8'] },
-  { id: 'embed', label: 'Embedding', apiKey: 'EMPTY', endpoint: 'http://localhost:8080/v1', models: ['Qwen3-Embedding-8B'] }
+  // Chat Models (for Agent conversation)
+  { id: 'chat-openai', category: 'chat', label: 'OpenAI Chat', apiKey: '', endpoint: 'https://api.openai.com/v1', models: ['gpt-4o'] },
+  { id: 'chat-local', category: 'chat', label: 'Local LLM', apiKey: 'EMPTY', endpoint: 'http://localhost:11434/v1', models: ['GPT-OSS-120B', 'GLM-4.7-FP8'] },
+  // Embedding Models (for RAG retrieval)
+  { id: 'embedding', category: 'embedding', label: 'Embedding', apiKey: 'EMPTY', endpoint: 'http://localhost:8080/v1', models: ['Qwen3-Embedding-8B'] },
+  // Reranker Models (for RAG reranking)
+  { id: 'reranker', category: 'reranker', label: 'Reranker', apiKey: 'EMPTY', endpoint: 'http://localhost:8080/v1', models: ['bge-reranker-large'] }
 ]
 
 // Load from localStorage or use defaults
@@ -36,11 +43,13 @@ const endpointConfigs = ref<EndpointConfig[]>(
 const apiKey = ref(localStorage.getItem('openai_api_key') || '')
 const apiEndpoint = ref(localStorage.getItem('openai_api_endpoint') || 'https://api.openai.com')
 
-// Computed: all available models from all endpoints
+// Computed: all available chat models (for global model selector)
 const allAvailableModels = computed(() => {
   const models: string[] = []
   for (const config of endpointConfigs.value) {
-    models.push(...config.models)
+    if (config.category === 'chat') {
+      models.push(...config.models)
+    }
   }
   return [...new Set(models)]  // Remove duplicates
 })
@@ -48,7 +57,15 @@ const allAvailableModels = computed(() => {
 // Global model configuration (all agents use this)
 const globalModel = ref<ModelType>(localStorage.getItem('global_model') as ModelType || 'gpt-5.2')
 const globalTemperature = ref<number>(parseFloat(localStorage.getItem('global_temperature') || '0.5'))
-const globalBehaviorPreset = ref<string>(localStorage.getItem('global_behavior_preset') || 'analytical')
+const globalMaxTokens = ref<number>(parseInt(localStorage.getItem('global_max_tokens') || '16000'))
+// Reasoning effort for O-series/GPT models: 'low' | 'medium' | 'high'
+const globalReasoningEffort = ref<string>(localStorage.getItem('global_reasoning_effort') || 'medium')
+// Thinking mode for GLM models
+const globalThinking = ref<boolean>(localStorage.getItem('global_thinking') === 'true')
+
+// Current loaded template tracking (for overwrite save)
+const currentTemplateId = ref<string | null>(null)
+const currentTemplateName = ref<string | null>(null)
 
 // Streaming simulation state
 const processingNodeIds = ref<Set<string>>(new Set())
@@ -190,14 +207,23 @@ export function useTopology() {
     topologyDescription.value = ''
   }
 
-  function exportTopology() {
+  // ... (imports and checks)
+
+  function exportTopology(): Topology {
     return {
       name: topologyName.value,
       description: topologyDescription.value,
       nodes: nodes.value,
       edges: edges.value,
       inputNodes: inputNodes.value,
-      outputNodes: outputNodes.value
+      outputNodes: outputNodes.value,
+      globalSettings: {
+        model: globalModel.value,
+        temperature: globalTemperature.value,
+        maxTokens: globalMaxTokens.value,
+        reasoningEffort: globalReasoningEffort.value,
+        thinking: globalThinking.value
+      }
     }
   }
 
@@ -209,6 +235,30 @@ export function useTopology() {
     edges.value = topology.edges
     inputNodes.value = topology.inputNodes || []
     outputNodes.value = topology.outputNodes || []
+
+    // Restore global settings if present
+    if (topology.globalSettings) {
+      if (topology.globalSettings.model) {
+        globalModel.value = topology.globalSettings.model
+        localStorage.setItem('global_model', topology.globalSettings.model)
+      }
+      if (topology.globalSettings.temperature !== undefined) {
+        globalTemperature.value = topology.globalSettings.temperature
+        localStorage.setItem('global_temperature', topology.globalSettings.temperature.toString())
+      }
+      if (topology.globalSettings.maxTokens !== undefined) {
+        globalMaxTokens.value = topology.globalSettings.maxTokens
+        localStorage.setItem('global_max_tokens', topology.globalSettings.maxTokens.toString())
+      }
+      if (topology.globalSettings.reasoningEffort) {
+        globalReasoningEffort.value = topology.globalSettings.reasoningEffort
+        localStorage.setItem('global_reasoning_effort', topology.globalSettings.reasoningEffort)
+      }
+      if (topology.globalSettings.thinking !== undefined) {
+        globalThinking.value = topology.globalSettings.thinking
+        localStorage.setItem('global_thinking', topology.globalSettings.thinking.toString())
+      }
+    }
   }
 
   function setApiKey(key: string) {
@@ -275,7 +325,9 @@ export function useTopology() {
     // Global model config
     globalModel,
     globalTemperature,
-    globalBehaviorPreset,
+    globalMaxTokens,
+    globalReasoningEffort,
+    globalThinking,
     setGlobalModel: (model: ModelType) => {
       globalModel.value = model
       localStorage.setItem('global_model', model)
@@ -284,9 +336,17 @@ export function useTopology() {
       globalTemperature.value = temp
       localStorage.setItem('global_temperature', temp.toString())
     },
-    setGlobalBehaviorPreset: (preset: string) => {
-      globalBehaviorPreset.value = preset
-      localStorage.setItem('global_behavior_preset', preset)
+    setGlobalMaxTokens: (tokens: number) => {
+      globalMaxTokens.value = tokens
+      localStorage.setItem('global_max_tokens', tokens.toString())
+    },
+    setGlobalReasoningEffort: (effort: string) => {
+      globalReasoningEffort.value = effort
+      localStorage.setItem('global_reasoning_effort', effort)
+    },
+    setGlobalThinking: (enabled: boolean) => {
+      globalThinking.value = enabled
+      localStorage.setItem('global_thinking', enabled.toString())
     },
     addNode,
     updateNode,
@@ -338,6 +398,13 @@ export function useTopology() {
       }
       // Fallback to legacy
       return { apiKey: apiKey.value, endpoint: apiEndpoint.value }
+    },
+    // Current template tracking
+    currentTemplateId,
+    currentTemplateName,
+    setCurrentTemplate: (id: string | null, name: string | null) => {
+      currentTemplateId.value = id
+      currentTemplateName.value = name
     }
   }
 }

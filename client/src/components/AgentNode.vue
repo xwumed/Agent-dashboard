@@ -25,6 +25,13 @@ const statusClass = computed(() => {
   if (isSimulating.value) return 'border-gray-300 bg-white shadow-md'
   return 'border-gray-200 bg-white shadow-md hover:shadow-lg'
 })
+
+const selectionClass = computed(() => {
+  if (!props.selected) return ''
+  // Selection override (stronger border + glow)
+  /* if (hasResult.value) return 'ring-1 ring-emerald-500 !border-emerald-500 shadow-emerald-100' -- Removed to simplify */
+  return '!border-primary-500 ring-1 ring-primary-500 shadow-lg'
+})
 </script>
 
 <template>
@@ -32,7 +39,8 @@ const statusClass = computed(() => {
     class="px-3 py-2.5 rounded-lg border min-w-[160px] max-w-[200px] transition-all"
     :class="[
       statusClass,
-      selected ? 'ring-2 ring-primary-600 ring-offset-1' : '',
+      statusClass,
+      selectionClass,
       data.rogueMode.enabled ? 'border-dashed border-amber-400' : ''
     ]"
   >

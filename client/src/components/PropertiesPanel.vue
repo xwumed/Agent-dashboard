@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { ChevronDown, ChevronUp, Trash2, HelpCircle, BookOpen, Wrench, Lock, Copy, Check, Clock, Zap, AlertCircle, Edit3 } from 'lucide-vue-next'
+import { ChevronDown, ChevronUp, Trash2, HelpCircle, BookOpen, Wrench, Lock, Copy, Check, Clock, Zap, AlertCircle, Edit3, FolderOpen, FileText, Loader2 } from 'lucide-vue-next'
 import { useTopology } from '../composables/useTopology'
 import { buildPrompt } from '../utils/promptBuilder'
-import type { BehaviorPreset, ModelType, SuspicionLevel, RogueProfile, AgentTool } from '../types'
+import type { BehaviorPreset, ModelType, SuspicionLevel, RogueProfile, AgentTool, InputNodeData } from '../types'
 
 // Available tools from backend
 interface ToolDef {
@@ -42,12 +42,119 @@ const tooltips = {
 const {
   selectedItem,
   updateNode,
+  updateInputNode,
   removeNode,
   edges,
   simulationResults,
   getOutputNodeResult,
   globalModel
 } = useTopology()
+
+
+
+// Selected input node (type-safe access)
+const selectedInput = computed(() => {
+  if (selectedItem.value?.type === 'input') {
+    return selectedItem.value.data as InputNodeData
+  }
+  return null
+})
+
+
+
+// Update task text for input node
+function updateInputTask(newTask: string) {
+  if (selectedInput.value) {
+    updateInputNode(selectedInput.value.id, { task: newTask })
+  }
+}
+
+// File upload refs
+const fileInput = ref<HTMLInputElement | null>(null)
+const folderInput = ref<HTMLInputElement | null>(null)
+const isUploading = ref(false)
+
+// Select file trigger
+function selectFile() {
+  fileInput.value?.click()
+}
+
+// Select folder trigger
+function selectFolder() {
+  folderInput.value?.click()
+}
+
+
+
+// Handle file upload
+async function handleFileUpload(event: Event) {
+  const input = event.target as HTMLInputElement
+  if (!input.files || input.files.length === 0) return
+  
+  await uploadFiles(input.files)
+  input.value = '' // Reset
+}
+
+// Upload implementation
+async function uploadFiles(files: FileList) {
+  isUploading.value = true
+  
+  try {
+    const formData = new FormData()
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]
+      if (file) {
+        formData.append('files', file)
+      }
+    }
+    
+    // Determine mode based on file count or attributes
+    // If one file and it's json, mode='file'
+    // If multiple files or webkitdirectory, mode='folder' (conceptually)
+    
+    const response = await fetch('/api/upload', {
+      method: 'POST',
+      body: formData
+    })
+    
+    if (!response.ok) throw new Error('Upload failed')
+    
+    const result = await response.json()
+    const savedPaths = result.saved_paths as string[]
+    
+    // Check if files[0] exists before accessing
+    if (files.length > 0 && savedPaths.length === 1 && files[0]?.name.endsWith('.json')) {
+      // Single JSON file mode
+      const content = await files[0].text()
+      if (selectedInput.value) {
+         updateInputNode(selectedInput.value.id, {
+          inputPath: savedPaths[0],
+          inputMode: 'file',
+          task: content,
+          folderFiles: undefined
+        })
+      }
+      
+    } else if (selectedInput.value) {
+      // Folder/Multi-file mode
+      const jsonFiles = Array.from(files)
+        .filter(f => f && f.name.endsWith('.json'))
+        .map(f => f.name)
+        
+      updateInputNode(selectedInput.value.id, {
+        inputPath: result.directory, // Use the session directory
+        inputMode: 'folder',
+        folderFiles: jsonFiles
+      })
+    }
+    
+  } catch (err) {
+    console.error(err)
+    // Show error?
+  } finally {
+    isUploading.value = false
+  }
+}
 
 // Check if selected node has simulation results (for agent nodes)
 const nodeResult = computed(() => {
@@ -242,18 +349,103 @@ function toggleTool(tool: ToolDef) {
       </div>
 
       <!-- Task content -->
-      <div class="flex-1 flex flex-col min-h-0">
-        <div class="flex items-center justify-between mb-1.5">
-          <label class="text-xs font-medium text-gray-500">Task Description</label>
+      <!-- Path Selection (Supports Single File or Folder) -->
+      <div>
+        <div class="flex items-center gap-1.5 text-xs font-medium text-gray-500 mb-1.5">
+          <FolderOpen class="w-3.5 h-3.5" />
+          Input Source
+        </div>
+        
+        <!-- Selection Buttons -->
+        <div class="flex gap-2 mb-2">
+          <!-- Hidden Inputs -->
+          <input
+            ref="fileInput"
+            type="file"
+            accept=".json"
+            class="hidden"
+            @change="handleFileUpload"
+          />
+          <input
+            ref="folderInput"
+            type="file"
+            webkitdirectory
+            directory
+            class="hidden"
+            @change="handleFileUpload"
+          />
+
           <button
-            @click="copyOutput"
-            class="flex items-center gap-1 px-2 py-1 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+            @click="selectFile"
+            :disabled="isUploading"
+            class="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-primary-500 transition-colors disabled:opacity-50"
           >
-            <component :is="copied ? Check : Copy" class="w-3 h-3" />
-            {{ copied ? 'Copied' : 'Copy' }}
+            <FileText class="w-3.5 h-3.5 text-blue-500" />
+            Upload File
+          </button>
+          <button
+            @click="selectFolder"
+            :disabled="isUploading"
+            class="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-primary-500 transition-colors disabled:opacity-50"
+          >
+            <FolderOpen class="w-3.5 h-3.5 text-green-500" />
+            Upload Folder
           </button>
         </div>
-        <div class="flex-1 bg-blue-50 border border-blue-200 rounded-md p-3 text-xs text-gray-700 whitespace-pre-wrap break-words overflow-y-auto max-h-[400px] leading-relaxed">{{ (selectedItem.data as any).task || 'No task defined' }}</div>
+        
+        <!-- Selected Path Display -->
+        <div v-if="selectedInput?.inputPath" class="flex items-center gap-1 px-2 py-1.5 bg-gray-50 border border-gray-200 rounded text-xs mb-1">
+          <span class="text-gray-400 font-mono flex-shrink-0">Path:</span>
+          <span class="text-gray-700 truncate flex-1" :title="selectedInput.inputPath">{{ selectedInput.inputPath }}</span>
+          <Loader2 v-if="isUploading" class="w-3 h-3 animate-spin text-primary-500 flex-shrink-0" />
+        </div>
+      
+        <!-- Folder File List Display -->
+        <div v-if="selectedInput?.inputMode === 'folder' && selectedInput?.folderFiles?.length" class="mt-2 text-xs">
+          <div class="flex items-center justify-between mb-1 text-green-700 font-medium">
+            <span>Folder Content ({{ selectedInput.folderFiles.length }} files)</span>
+          </div>
+          <div class="bg-green-50 border border-green-200 rounded-md max-h-40 overflow-y-auto">
+            <div 
+              v-for="file in selectedInput.folderFiles" 
+              :key="file"
+              class="px-2 py-1.5 border-b border-green-100 last:border-b-0 text-green-800 flex items-center gap-1.5"
+            >
+              <FileText class="w-3 h-3 flex-shrink-0 opacity-70" />
+              <span class="truncate">{{ file }}</span>
+            </div>
+          </div>
+          <div class="mt-1 text-[10px] text-gray-500">
+             Batch processing will iterate through these files.
+          </div>
+        </div>
+      </div>
+
+      <!-- Task content (Editable text or Single File Content) -->
+      <div v-if="selectedInput?.inputMode !== 'folder'" class="flex-1 flex flex-col min-h-0">
+        <div class="flex items-center justify-between mb-1.5">
+          <label class="text-xs font-medium text-gray-500">
+            {{ selectedInput?.inputMode === 'file' ? 'File Content (Editable)' : 'Task Description' }}
+          </label>
+          <div class="flex items-center gap-1">
+            <div v-if="selectedInput?.inputMode === 'file'" class="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-[10px] rounded">
+              JSON
+            </div>
+            <button
+              @click="copyOutput"
+              class="flex items-center gap-1 px-2 py-1 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+            >
+              <component :is="copied ? Check : Copy" class="w-3 h-3" />
+              {{ copied ? 'Copied' : 'Copy' }}
+            </button>
+          </div>
+        </div>
+        <textarea
+          :value="(selectedItem.data as any).task || ''"
+          @input="e => updateInputTask((e.target as HTMLTextAreaElement).value)"
+          class="flex-1 w-full bg-blue-50 border border-blue-200 rounded-md p-3 text-xs text-gray-700 resize-none focus:outline-none focus:ring-1 focus:ring-blue-300 font-mono leading-relaxed"
+          placeholder="Enter task description here..."
+        ></textarea>
       </div>
     </div>
 
@@ -375,6 +567,28 @@ function toggleTool(tool: ToolDef) {
           class="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-primary-600 focus:border-primary-600 focus:bg-white resize-none transition-colors"
           placeholder="Describe what this agent does..."
         />
+      </div>
+
+      <!-- Behavior Preset -->
+      <div>
+        <label class="flex items-center gap-1 text-xs font-medium text-gray-500 mb-1.5">
+          Behavior Preset
+          <span class="group relative">
+            <HelpCircle class="w-3 h-3 text-gray-300 hover:text-primary-500 cursor-help" />
+            <span class="absolute left-0 bottom-full mb-2 w-56 p-2 bg-gray-900 text-white text-xs rounded-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity z-50 shadow-lg">
+              {{ tooltips.preset }}
+            </span>
+          </span>
+        </label>
+        <select
+          :value="selectedAgent!.behaviorPreset || 'analytical'"
+          @change="updateField('behaviorPreset', ($event.target as HTMLSelectElement).value as BehaviorPreset)"
+          class="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-primary-600 focus:border-primary-600 focus:bg-white transition-colors"
+        >
+          <option v-for="preset in behaviorPresets" :key="preset.value" :value="preset.value">
+            {{ preset.label }}
+          </option>
+        </select>
       </div>
 
       <!-- Oversight toggle -->

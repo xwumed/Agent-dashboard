@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { X, Clock, Coins, AlertCircle, Copy, Check } from 'lucide-vue-next'
+import { X, Clock, Coins, AlertCircle, Copy, Check, Wrench, MessageSquare } from 'lucide-vue-next'
 import { useTopology } from '../composables/useTopology'
 
 const props = defineProps<{
@@ -131,8 +131,58 @@ async function copyError() {
               </button>
             </div>
 
+            <!-- Tool Usage -->
+            <!-- Tool Usage -->
+            <div v-if="selectedNode.tools && selectedNode.tools.length > 0" class="space-y-2">
+              <div class="flex items-center gap-1.5 text-xs font-medium text-gray-700">
+                <Wrench class="w-3.5 h-3.5" />
+                Tool Usage
+              </div>
+              
+              <div v-if="result.tool_calls && result.tool_calls.length > 0" class="space-y-2">
+                <div 
+                  v-for="(call, index) in result.tool_calls" 
+                  :key="index"
+                  class="bg-blue-50 border border-blue-100 rounded-md overflow-hidden"
+                >
+                  <!-- Tool Header -->
+                  <div class="px-3 py-2 bg-blue-100/50 flex items-center justify-between border-b border-blue-100">
+                    <span class="text-xs font-medium text-blue-900 font-mono">{{ call.tool_name }}</span>
+                    <span class="text-[10px] text-blue-700 px-1.5 py-0.5 bg-blue-200/50 rounded">Success</span>
+                  </div>
+                  
+                  <!-- Tool Details -->
+                  <div class="p-3 space-y-2 text-xs">
+                    <!-- Args -->
+                    <div>
+                      <span class="text-[10px] text-blue-500 font-medium uppercase tracking-wider">Arguments</span>
+                      <pre class="mt-1 font-mono text-blue-900 bg-white/50 p-1.5 rounded border border-blue-100 overflow-x-auto">{{ JSON.parse(call.args) }}</pre>
+                    </div>
+                    <!-- Result -->
+                    <div>
+                      <span class="text-[10px] text-blue-500 font-medium uppercase tracking-wider">Result</span>
+                      <div class="mt-1 text-blue-900 bg-white/50 p-1.5 rounded border border-blue-100 max-h-32 overflow-y-auto whitespace-pre-wrap">{{ call.result }}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- No tools used state -->
+              <div v-else class="bg-gray-50 border border-gray-200 rounded-md p-3">
+                <div class="flex items-center gap-2">
+                   <div class="w-1.5 h-1.5 rounded-full bg-gray-400"></div>
+                   <span class="text-xs text-gray-500 italic">No tools used in this execution</span>
+                </div>
+              </div>
+            </div>
+
             <!-- Output text -->
             <div class="bg-gray-50 rounded-md p-3 max-h-[60vh] overflow-y-auto">
+              <!-- Label for output -->
+              <div class="flex items-center gap-1.5 text-xs font-medium text-gray-700 mb-2">
+                 <MessageSquare class="w-3.5 h-3.5" />
+                 Assistant Response
+              </div>
               <pre class="whitespace-pre-wrap text-xs text-gray-700 font-sans leading-relaxed">{{ result.output }}</pre>
             </div>
 

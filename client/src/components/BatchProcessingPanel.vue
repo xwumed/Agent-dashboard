@@ -8,9 +8,7 @@ import {
   Download,
   Trash2,
   CheckCircle,
-  XCircle,
   Loader2,
-  FolderOpen,
   Star
 } from 'lucide-vue-next'
 import { useBatchProcessing } from '../composables/useBatchProcessing'
@@ -18,9 +16,8 @@ import { useTopology } from '../composables/useTopology'
 import { scenarios } from '../scenarios'
 import type { ScenarioCategory } from '../types'
 
-const { apiKey, apiEndpoint, globalModel, globalTemperature, globalBehaviorPreset } = useTopology()
+const { apiKey, apiEndpoint, globalModel, globalTemperature } = useTopology()
 const {
-  uploadedScenarios,
   batchRuns,
   isRunning,
   totalSelected,
@@ -31,8 +28,7 @@ const {
   selectAll,
   clearSelection,
   isSelected,
-  uploadScenarios,
-  removeUploadedScenario,
+
   runBatch,
   cancelBatch,
   downloadResults,
@@ -40,9 +36,10 @@ const {
   loadCustomTemplatesForBatch
 } = useBatchProcessing()
 
+// const localInputPath = ref('') // Removed since batch input is removed
+
 const isExpanded = ref(false)
 const expandedCategories = ref<Set<ScenarioCategory | 'my-templates'>>(new Set())
-const fileInputRef = ref<HTMLInputElement | null>(null)
 const error = ref<string | null>(null)
 
 // Load custom templates when panel expands
@@ -131,13 +128,7 @@ function toggleCategory(category: ScenarioCategory | 'my-templates') {
   }
 }
 
-function handleFileSelect(event: Event) {
-  const input = event.target as HTMLInputElement
-  if (input.files && input.files.length > 0) {
-    uploadScenarios(input.files)
-    input.value = ''
-  }
-}
+
 
 async function handleRunBatch() {
   error.value = null
@@ -156,8 +147,7 @@ async function handleRunBatch() {
     apiKey.value,
     apiEndpoint.value,
     globalModel.value,
-    globalTemperature.value,
-    globalBehaviorPreset.value
+    globalTemperature.value
   )
 }
 
@@ -267,31 +257,6 @@ function getRunStatus(scenarioId: string) {
           </div>
         </div>
 
-        <!-- Uploaded scenarios -->
-        <div v-if="uploadedScenarios.length > 0">
-          <div class="px-2 py-1.5 bg-gray-50 border-b border-gray-100">
-            <span class="text-[10px] font-medium text-gray-600">Uploaded</span>
-          </div>
-          <label
-            v-for="scenario in uploadedScenarios"
-            :key="scenario.id"
-            class="flex items-center gap-2 px-2 py-1.5 hover:bg-blue-50 cursor-pointer border-b border-gray-50"
-          >
-            <input
-              type="checkbox"
-              :checked="isSelected(scenario.id)"
-              @change="toggleScenario(scenario.id)"
-              class="w-3 h-3 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-            />
-            <span class="text-[10px] text-gray-700 truncate flex-1">{{ scenario.name }}</span>
-            <button
-              @click.stop="removeUploadedScenario(scenario.id)"
-              class="text-gray-400 hover:text-red-500"
-            >
-              <Trash2 class="w-3 h-3" />
-            </button>
-          </label>
-        </div>
       </div>
 
       <!-- Selection controls -->
@@ -310,23 +275,7 @@ function getRunStatus(scenarioId: string) {
         >
           <XCircle class="w-4 h-4" />
         </button>
-        <div class="flex-1" />
-        <button
-          @click="fileInputRef?.click()"
-          class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md transition-colors"
-          title="Upload JSON files"
-        >
-          <FolderOpen class="w-3.5 h-3.5" />
-          Upload
-        </button>
-        <input
-          ref="fileInputRef"
-          type="file"
-          accept=".json"
-          multiple
-          class="hidden"
-          @change="handleFileSelect"
-        />
+
       </div>
 
       <!-- Action buttons -->

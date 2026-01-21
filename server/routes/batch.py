@@ -27,6 +27,105 @@ class BatchJobResponse(BaseModel):
     message: str
 
 
+class ScanInputRequest(BaseModel):
+    path: str
+
+
+class ScanInputFileResult(BaseModel):
+    type: str = "file"
+    filename: str
+    content: dict
+
+
+class ScanInputFolderResult(BaseModel):
+    type: str = "folder"
+    files: list[str]
+
+
+class SystemDialogRequest(BaseModel):
+    type: str  # 'file' or 'folder'
+
+
+@router.post("/system/dialog/open")
+async def open_system_dialog(request: SystemDialogRequest):
+    """POST /api/system/dialog/open - Open system file/folder dialog"""
+    import tkinter as tk
+    from tkinter import filedialog
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    try:
+        # Create hidden root window
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes('-topmost', True)
+        
+        path = ""
+        if request.type == 'file':
+            path = filedialog.askopenfilename(
+                title="Select JSON File",
+                filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
+            )
+        else:
+            path = filedialog.askdirectory(
+                title="Select Folder"
+            )
+            
+        root.destroy()
+        
+        if not path:
+             return {"path": None, "cancelled": True}
+             
+        return {"path": path, "cancelled": False}
+        
+    except Exception as e:
+        logger.error(f"Failed to open system dialog: {e}")
+        # Make sure to destroy root if error occurs
+        try:
+            if 'root' in locals():
+                root.destroy()
+        except:
+            pass
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/batch/scan-input")
+async def scan_input_path(request: ScanInputRequest):
+    """POST /api/batch/scan-input - Scan file or folder path for JSON files"""
+    
+    input_path = Path(request.path)
+    
+    if not input_path.exists():
+        raise HTTPException(status_code=400, detail=f"Path not found: {request.path}")
+    
+    if input_path.is_file():
+        # Single file - read and return content
+        if not input_path.suffix.lower() == '.json':
+            raise HTTPException(status_code=400, detail="File must be a JSON file")
+        try:
+            with open(input_path, 'r', encoding='utf-8') as f:
+                content = json.load(f)
+            return ScanInputFileResult(
+                type="file",
+                filename=input_path.name,
+                content=content
+            )
+        except json.JSONDecodeError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid JSON: {str(e)}")
+    
+    elif input_path.is_dir():
+        # Folder - list JSON files
+        json_files = sorted([f.name for f in input_path.glob("*.json")])
+        return ScanInputFolderResult(
+            type="folder",
+            files=json_files
+        )
+    
+    else:
+        raise HTTPException(status_code=400, detail="Path must be a file or directory")
+
+
 @router.post("/batch/start")
 async def start_batch_job(request: BatchJobRequest) -> BatchJobResponse:
     """POST /api/batch/start - Start a batch processing job"""

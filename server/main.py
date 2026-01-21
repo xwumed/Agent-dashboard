@@ -13,6 +13,7 @@ from .routes.simulation import router as simulation_router
 from .routes.templates import router as templates_router
 from .routes.tools import router as tools_router
 from .routes.batch import router as batch_router
+from .routes.upload import router as upload_router
 
 # Load environment variables
 load_dotenv()
@@ -59,6 +60,7 @@ app.include_router(simulation_router, prefix="/api")
 app.include_router(templates_router, prefix="/api")
 app.include_router(tools_router, prefix="/api")
 app.include_router(batch_router, prefix="/api")
+app.include_router(upload_router)
 
 
 # Serve static files if client build exists
@@ -88,3 +90,5 @@ if __name__ == "__main__":
         port=port,
         reload=True
     )
+
+# Timestamp: 2026-01-21 Touched to trigger reload (Global Settings Persistence)

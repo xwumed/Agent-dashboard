@@ -19,6 +19,48 @@ from .prompt_builder import build_prompt, get_relationship_prefix, IncomingConte
 from ..tools.tool_wrappers import get_tools_for_node
 
 
+def save_output_file(input_path: str, topology: Topology, results: dict):
+    """Save aggregated output to a .output file next to the input file"""
+    try:
+        from pathlib import Path
+        import json
+        
+        input_p = Path(input_path)
+        if not input_p.exists():
+            return
+            
+        output_p = input_p.with_suffix(".output")
+        
+        # Aggregate output from all output nodes
+        aggregated_content = []
+        output_nodes = topology.output_nodes or []
+        
+        # Find edges targeting output nodes
+        for out_node in output_nodes:
+            incoming_edges = [e for e in topology.edges if e.target == out_node.id]
+            for edge in incoming_edges:
+                res = results.get(edge.source)
+                if res:
+                    source_node = next((n for n in topology.nodes if n.id == edge.source), None)
+                    source_name = source_node.name if source_node else edge.source
+                    # Use model_dump if it's a SimulationResult object, otherwise it's already a dict
+                    content = res.output if hasattr(res, 'output') else res.get('output', '')
+                    aggregated_content.append(f"## {source_name} Output for {out_node.label}\n\n{content}")
+        
+        if not aggregated_content:
+            # Fallback: just dump all results if no output nodes defined
+            final_text = json.dumps(results, indent=2, ensure_ascii=False)
+        else:
+            final_text = "\n\n---\n\n".join(aggregated_content)
+            
+        with open(output_p, "w", encoding="utf-8") as f:
+            f.write(final_text)
+            
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Failed to save output file: {e}")
+
+
 def topological_sort(nodes: list[AgentNodeData], edges: list[AgentEdge]) -> list[list[str]]:
     """
     Perform topological sort on the graph to determine execution order.
@@ -88,7 +130,9 @@ async def execute_simulation_stream(
     api_endpoint: Optional[str] = None,
     global_model: Optional[str] = "gpt-5.2",
     global_temperature: Optional[float] = 0.5,
-    global_behavior_preset: Optional[str] = "analytical",
+    global_max_tokens: Optional[int] = 16000,
+    global_reasoning_effort: Optional[str] = "medium",
+    global_thinking: Optional[bool] = False,
     endpoint_configs: Optional[list[EndpointConfig]] = None
 ) -> AsyncGenerator[dict, None]:
     """
@@ -202,7 +246,7 @@ async def execute_simulation_stream(
 
                 # Call OpenAI - use global model only (node.model is deprecated)
                 model_to_use = global_model or "gpt-4o"
-                is_new_model = any(model_to_use.startswith(p) for p in ("o1", "o3", "gpt-4.5", "gpt-5"))
+                is_new_model = any(model_to_use.lower().startswith(p.lower()) for p in ("o1", "o3", "gpt-4.5", "gpt-5", "gpt-oss"))
 
                 # Get correct client for this model
                 client = get_client_for_model(model_to_use)
@@ -213,7 +257,9 @@ async def execute_simulation_stream(
 
                 if has_tools:
                     # Use openai-agents SDK for tool calling
-                    tools = get_tools_for_node(node_tools)
+                    # node_tools contains AgentTool objects, we need to extract their IDs
+                    tool_ids = [t.id for t in node_tools]
+                    tools = get_tools_for_node(tool_ids)
                     
                     if tools:
                         agent = Agent(
@@ -237,6 +283,53 @@ async def execute_simulation_stream(
                         agent_result = await Runner.run(agent, user_prompt)
                         output_text = ItemHelpers.text_message_outputs(agent_result.new_items)
                         
+                        # Extract tool calls
+                        from ..models import ToolCallInfo
+                        from agents import ToolCallItem, ToolCallOutputItem
+                        
+                        tool_calls = []
+                        # Create a map of call_id to tool info
+                        call_map = {}
+                        
+                        for item in agent_result.new_items:
+                            if isinstance(item, ToolCallItem):
+                                # Check for function tool call (most common)
+                                raw = item.raw_item
+                                # OpenAI SDK object or dict
+                                if hasattr(raw, 'function'):
+                                    call_map[raw.id] = {
+                                        "tool_name": raw.function.name,
+                                        "args": raw.function.arguments,
+                                        "result": "Pending..."
+                                    }
+                                elif isinstance(raw, dict) and 'function' in raw:
+                                    call_map[raw.get('id')] = {
+                                        "tool_name": raw['function'].get('name'),
+                                        "args": raw['function'].get('arguments'),
+                                        "result": "Pending..."
+                                    }
+                                    
+                            elif isinstance(item, ToolCallOutputItem):
+                                raw = item.raw_item
+                                call_id = None
+                                if hasattr(raw, 'call_id'):
+                                    call_id = raw.call_id
+                                elif isinstance(raw, dict):
+                                    call_id = raw.get('call_id')
+                                
+                                if call_id and call_id in call_map:
+                                    # Convert output to string properly
+                                    result_str = str(item.output)
+                                    call_map[call_id]["result"] = result_str
+                        
+                        # Convert map to list
+                        for call_id, info in call_map.items():
+                            tool_calls.append(ToolCallInfo(
+                                tool_name=info["tool_name"],
+                                args=info["args"],
+                                result=str(info["result"])
+                            ))
+
                         duration = int((time.time() - start_time) * 1000)
                         
                         # Estimate tokens (SDK doesn't provide exact count)
@@ -250,7 +343,8 @@ async def execute_simulation_stream(
                                 prompt=prompt_tokens,
                                 completion=completion_tokens
                             ),
-                            duration=duration
+                            duration=duration,
+                            tool_calls=tool_calls if tool_calls else None
                         )
                         
                         results[node_id] = result
@@ -263,10 +357,18 @@ async def execute_simulation_stream(
                 }
 
                 if is_new_model:
-                    completion_params["max_completion_tokens"] = 2000
+                    # New models (o1/o3/gpt-4.5) use max_completion_tokens
+                    completion_params["max_completion_tokens"] = global_max_tokens or 16000
+                    if global_reasoning_effort:
+                        completion_params["reasoning_effort"] = global_reasoning_effort
                 else:
-                    completion_params["max_tokens"] = 2000
+                    # Standard models
+                    completion_params["max_tokens"] = global_max_tokens or 2000
                     completion_params["temperature"] = temperature
+                
+                # GLM thinking parameter
+                if "glm" in model_to_use.lower() and global_thinking:
+                    completion_params["extra_body"] = {"thinking": {"strategy": "thinking"}}
 
                 response = await client.chat.completions.create(**completion_params)
 
@@ -317,6 +419,11 @@ async def execute_simulation_stream(
                         "nodeId": result["nodeId"],
                         "result": result["result"].model_dump(by_alias=True)
                     }
+
+    # Save to disk if inputNodes specify paths
+    for in_node in input_nodes:
+        if in_node.input_path:
+            save_output_file(in_node.input_path, topology, results)
 
     # Emit completion event
     yield {

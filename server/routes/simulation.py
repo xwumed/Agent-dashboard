@@ -44,7 +44,9 @@ async def simulate(request: SimulationRequest):
                 request.api_endpoint,
                 request.global_model,
                 request.global_temperature,
-                request.global_behavior_preset,
+                request.global_max_tokens,
+                request.global_reasoning_effort,
+                request.global_thinking,
                 request.endpoint_configs
             ):
                 event_count += 1

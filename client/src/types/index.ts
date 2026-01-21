@@ -55,6 +55,9 @@ export interface InputNodeData {
   id: string
   type: 'input'
   task: string
+  inputPath?: string         // File or folder path
+  inputMode?: 'text' | 'file' | 'folder'  // Input mode
+  folderFiles?: string[]     // List of JSON files when mode is 'folder'
 }
 
 export interface OutputNodeData {
@@ -72,6 +75,14 @@ export interface AgentEdge {
   relationshipType: RelationshipType
 }
 
+export interface GlobalSettings {
+  model?: ModelType
+  temperature?: number
+  maxTokens?: number
+  reasoningEffort?: string
+  thinking?: boolean
+}
+
 export interface Topology {
   name: string
   description?: string
@@ -79,6 +90,13 @@ export interface Topology {
   edges: AgentEdge[]
   inputNodes?: InputNodeData[]
   outputNodes?: OutputNodeData[]
+  globalSettings?: GlobalSettings
+}
+
+export interface ToolCallInfo {
+  tool_name: string;
+  args: any;
+  result: string;
 }
 
 export interface SimulationResult {
@@ -90,6 +108,7 @@ export interface SimulationResult {
   }
   duration: number
   error?: string
+  tool_calls?: ToolCallInfo[]
 }
 
 export interface SimulationResponse {

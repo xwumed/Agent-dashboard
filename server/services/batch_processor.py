@@ -139,8 +139,17 @@ class BatchProcessor:
                 result = await simulate_func(patient_data, job.template_id)
                 
                 # Save result
-                output_file = job.output_dir / f"{json_file.stem}_result.json"
+                output_file = job.output_dir / f"{json_file.stem}.output"
+                
+                # Extract aggregated output (similar to how UI does it)
+                # If there are agent results, we can format them. 
+                # For batch processing, usually there's one "Final" output node logic.
+                # However, simulate_func returns results for all nodes. 
+                # We will save the whole JSON but with .output suffix to satisfy the name requirement,
+                # OR save just the text if that's what "suffix for output" implies.
+                # Given "complete experimental setup", I will save the full result JSON for durability.
                 with open(output_file, "w", encoding="utf-8") as f:
+                    # If result has a 'results' key (from orchestrator.py), it's the full dict
                     json.dump(result, f, indent=2, ensure_ascii=False)
                 
                 job.results.append({
