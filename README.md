@@ -1,4 +1,4 @@
-# SEED: Scalable and Evaluation-Driven Multi-Agent Framework
+# <img src="client/public/seed_logo.jpeg" width="60" align="center" alt="SEED Logo" /> SEED: Scalable and Evaluation-Driven Multi-Agent Framework
 
 **v2.0 (Python Backend)**
 
