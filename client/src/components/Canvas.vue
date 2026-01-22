@@ -492,31 +492,34 @@ watch(isCanvasEmpty, (empty) => {
       v-if="isCanvasEmpty"
       class="absolute inset-0 flex items-center justify-center pointer-events-none"
     >
-      <div class="bg-white rounded-xl shadow-lg border border-gray-200 p-8 max-w-md text-center pointer-events-auto">
-        <div class="w-16 h-16 bg-primary-50 rounded-full flex items-center justify-center mx-auto mb-4">
-          <svg class="w-8 h-8 text-primary-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <circle cx="12" cy="5" r="3" />
-            <circle cx="5" cy="19" r="3" />
-            <circle cx="19" cy="19" r="3" />
-            <line x1="12" y1="8" x2="5" y2="16" />
-            <line x1="12" y1="8" x2="19" y2="16" />
-          </svg>
+      <div class="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-blue-100 p-10 max-w-lg text-center pointer-events-auto transition-all hover:shadow-2xl hover:border-blue-200">
+        <div class="w-32 h-32 mx-auto mb-6 shadow-lg rounded-2xl overflow-hidden border border-blue-100">
+          <img src="/cosmos_logo.jpeg" class="w-full h-full object-cover" alt="COSMOS Logo" />
         </div>
-        <h3 class="text-lg font-semibold text-gray-900 mb-2">Welcome to Agent Dashboard</h3>
-        <p class="text-sm text-gray-500 mb-6">
-          Build multi-agent workflows for pharmaceutical R&D. Start by loading a pre-built scenario or drag components from the left panel.
+        
+        <h1 class="text-4xl font-bold text-gray-900 mb-2 tracking-tight">COSMOS</h1>
+        <h2 class="text-sm font-semibold text-blue-600 tracking-widest uppercase mb-4">Clinical Oncology Scalable Multi-agent Orchestration System</h2>
+        
+        <p class="text-base text-gray-600 mb-8 leading-relaxed">
+          Accelerating clinical implementation through multi-agent intelligence.
+          <br>
+          <span class="text-gray-400 text-sm mt-2 block">Case Study: Precision Oncology Tumor Board</span>
         </p>
-        <div class="flex flex-col gap-3">
+
+        <div class="flex flex-col gap-4">
           <button
             @click="$emit('load-scenario')"
-            class="flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors"
+            class="group flex items-center justify-center gap-3 px-6 py-3.5 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-blue-600 hover:shadow-lg hover:shadow-blue-500/20 transition-all duration-300 transform hover:-translate-y-0.5"
           >
-            <FolderOpen class="w-4 h-4" />
-            Load Example Scenario
+            <FolderOpen class="w-4 h-4 transition-transform group-hover:scale-110" />
+            Load Tumor Board Scenario
           </button>
-          <p class="text-xs text-gray-400">
-            Or drag Input, Agent, and Output nodes from the left panel
-          </p>
+          
+          <div class="flex items-center justify-center gap-2 text-xs text-gray-400 mt-2">
+            <div class="h-px bg-gray-200 w-12"></div>
+            <span>or build your own workflow</span>
+            <div class="h-px bg-gray-200 w-12"></div>
+          </div>
         </div>
       </div>
     </div>

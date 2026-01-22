@@ -104,8 +104,8 @@ Open two terminal windows:
 **Terminal 1: Backend**
 ```bash
 source venv/bin/activate
-uvicorn server.main:app --reload --port 3006
-# Swagger UI available at http://localhost:3006/docs
+uvicorn server.main:app --reload --port 8000
+# Swagger UI available at http://localhost:8000/docs
 ```
 
 **Terminal 2: Frontend**
@@ -130,4 +130,4 @@ npm run dev
 
 MIT License - see [LICENSE](LICENSE) for details.
 
-Copyright (c) 2026 Jakob Nikolas Kather (Kather Lab)
+Copyright (c) 2026 Xuewei Wu, Jakob Nikolas Kather (Kather Lab)

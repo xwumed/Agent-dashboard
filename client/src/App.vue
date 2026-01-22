@@ -317,7 +317,7 @@ function toggleOutput() {
     <!-- Header -->
     <header class="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-6 flex-shrink-0">
       <div class="flex items-center gap-3">
-        <img src="/seed_logo.jpeg" class="h-8 w-8 rounded-lg object-cover" alt="SEED Logo" />
+        <img src="/cosmos_logo.jpeg" class="h-8 w-8 rounded-lg object-cover" alt="COSMOS Logo" />
         <div class="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center hidden">
           <svg class="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="5" r="3" />
@@ -329,8 +329,7 @@ function toggleOutput() {
         
         <!-- Branding -->
         <div class="flex flex-col">
-          <span class="font-bold text-gray-900 leading-tight tracking-tight">SEED</span>
-          <span class="text-[9px] text-gray-500 leading-tight font-medium uppercase tracking-wider">Scalable & Evaluation-Driven</span>
+          <span class="font-bold text-gray-900 leading-tight tracking-tight">COSMOS</span>
         </div>
 
         <div class="h-8 w-px bg-gray-200 mx-2"></div>
