@@ -8,6 +8,7 @@ import {
   Download,
   Trash2,
   CheckCircle,
+  XCircle,
   Loader2,
   Star
 } from 'lucide-vue-next'

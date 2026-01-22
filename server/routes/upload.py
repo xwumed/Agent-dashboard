@@ -53,3 +53,59 @@ async def upload_files(
     except Exception as e:
         logger.error(f"Upload failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+from pydantic import BaseModel
+
+class ReadPathRequest(BaseModel):
+    path: str
+
+@router.post("/api/read-path")
+async def read_path(request: ReadPathRequest):
+    """
+    Read content from a local file path.
+    Returns file content and metadata.
+    """
+    try:
+        path = Path(request.path)
+        
+        if not path.exists():
+            raise HTTPException(status_code=404, detail=f"Path not found: {request.path}")
+        
+        if path.is_file():
+            # Single file mode
+            if not path.suffix.lower() == '.json':
+                raise HTTPException(status_code=400, detail="Only JSON files are supported")
+            
+            with open(path, "r", encoding="utf-8") as f:
+                content = f.read()
+            
+            return {
+                "mode": "file",
+                "path": str(path.absolute()),
+                "content": content,
+                "files": [path.name]
+            }
+        
+        elif path.is_dir():
+            # Folder mode - list JSON files
+            json_files = sorted([f.name for f in path.glob("*.json")])
+            
+            if not json_files:
+                raise HTTPException(status_code=400, detail="No JSON files found in directory")
+            
+            return {
+                "mode": "folder",
+                "path": str(path.absolute()),
+                "content": None,
+                "files": json_files
+            }
+        
+        else:
+            raise HTTPException(status_code=400, detail="Path is neither file nor directory")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Read path failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

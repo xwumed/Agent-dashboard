@@ -45,8 +45,6 @@ const hasOutput = computed(() => {
       </div>
     </div>
 
-
-
     <!-- Only input handle (left side) - receives FROM agents -->
     <Handle
       type="target"

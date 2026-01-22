@@ -14,6 +14,7 @@ from .routes.templates import router as templates_router
 from .routes.tools import router as tools_router
 from .routes.batch import router as batch_router
 from .routes.upload import router as upload_router
+from .routes.file_browser import router as file_browser_router
 
 # Load environment variables
 load_dotenv()
@@ -61,6 +62,7 @@ app.include_router(templates_router, prefix="/api")
 app.include_router(tools_router, prefix="/api")
 app.include_router(batch_router, prefix="/api")
 app.include_router(upload_router)
+app.include_router(file_browser_router)
 
 
 # Serve static files if client build exists

@@ -54,6 +54,7 @@ class InputNodeData(BaseModel):
     input_path: Optional[str] = Field(None, alias="inputPath")
     input_mode: Optional[Literal["text", "file", "folder"]] = Field("text", alias="inputMode")
     folder_files: Optional[list[str]] = Field(None, alias="folderFiles")
+    current_file: Optional[str] = Field(None, alias="currentFile")  # Current file being processed in folder mode
 
 
 class OutputNodeData(BaseModel):

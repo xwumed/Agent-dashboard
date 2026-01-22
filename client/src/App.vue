@@ -35,7 +35,9 @@ const {
   importTopology,
   currentTemplateName,
   topologyName,
-  topologyDescription
+  topologyDescription,
+  setOutputFiles,
+  clearOutputFiles
 } = useTopology()
 
 const showSettings = ref(false)
@@ -157,6 +159,7 @@ async function runSimulation() {
   simulationError.value = null
   setSimulationResults({})
   clearProcessingNodes()
+  clearOutputFiles()
 
   const controller = createAbortController()
 
@@ -239,6 +242,11 @@ async function runSimulation() {
               }
               updateNodeResult(event.nodeId, errorResult)
               results[event.nodeId] = errorResult
+            } else if (event.type === 'complete') {
+              // Store output files from the complete event
+              if (event.outputFiles && Array.isArray(event.outputFiles)) {
+                setOutputFiles(event.outputFiles)
+              }
             } else if (event.type === 'error') {
               throw new Error(event.error)
             }
@@ -445,7 +453,7 @@ function toggleOutput() {
               v-model="templateName"
               type="text"
               placeholder="My Custom Template"
-              class="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-primary-600"
+              class="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-600"
             />
           </div>
           <div>
@@ -454,7 +462,7 @@ function toggleOutput() {
               v-model="templateDescription"
               placeholder="Describe what this template does..."
               rows="3"
-              class="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-primary-600 resize-none"
+              class="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-600 resize-none"
             ></textarea>
           </div>
           <div class="flex justify-end gap-2 pt-2">
@@ -467,7 +475,7 @@ function toggleOutput() {
             <button
               @click="saveTemplate(false)"
               :disabled="!templateName.trim() || savingTemplate"
-              class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {{ savingTemplate ? 'Saving...' : 'Save' }}
             </button>

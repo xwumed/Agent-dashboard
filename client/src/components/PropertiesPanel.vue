@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { ChevronDown, ChevronUp, Trash2, HelpCircle, BookOpen, Wrench, Lock, Copy, Check, Clock, Zap, AlertCircle, Edit3, FolderOpen, FileText, Loader2 } from 'lucide-vue-next'
 import { useTopology } from '../composables/useTopology'
 import { buildPrompt } from '../utils/promptBuilder'
+import FileBrowser from './FileBrowser.vue'
 import type { BehaviorPreset, ModelType, SuspicionLevel, RogueProfile, AgentTool, InputNodeData } from '../types'
 
 // Available tools from backend
@@ -47,7 +48,8 @@ const {
   edges,
   simulationResults,
   getOutputNodeResult,
-  globalModel
+  globalModel,
+  outputFiles
 } = useTopology()
 
 
@@ -69,92 +71,70 @@ function updateInputTask(newTask: string) {
   }
 }
 
-// File upload refs
-const fileInput = ref<HTMLInputElement | null>(null)
-const folderInput = ref<HTMLInputElement | null>(null)
+// Path input refs
+const pathInput = ref('')
+const pathError = ref<string | null>(null)
 const isUploading = ref(false)
+const showFileBrowser = ref(false)
 
-// Select file trigger
-function selectFile() {
-  fileInput.value?.click()
+// Handle file browser selection
+async function handleBrowseSelect(selectedPath: string) {
+  pathInput.value = selectedPath
+  await loadPath(selectedPath)
 }
 
-// Select folder trigger
-function selectFolder() {
-  folderInput.value?.click()
-}
-
-
-
-// Handle file upload
-async function handleFileUpload(event: Event) {
-  const input = event.target as HTMLInputElement
-  if (!input.files || input.files.length === 0) return
+// Load path from backend
+async function loadPath(pathOverride?: string) {
+  const pathToLoad = pathOverride || pathInput.value.trim()
+  if (!pathToLoad || !selectedInput.value) return
   
-  await uploadFiles(input.files)
-  input.value = '' // Reset
-}
-
-// Upload implementation
-async function uploadFiles(files: FileList) {
   isUploading.value = true
+  pathError.value = null
   
   try {
-    const formData = new FormData()
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i]
-      if (file) {
-        formData.append('files', file)
-      }
-    }
-    
-    // Determine mode based on file count or attributes
-    // If one file and it's json, mode='file'
-    // If multiple files or webkitdirectory, mode='folder' (conceptually)
-    
-    const response = await fetch('/api/upload', {
+    const response = await fetch('/api/read-path', {
       method: 'POST',
-      body: formData
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: pathToLoad })
     })
     
-    if (!response.ok) throw new Error('Upload failed')
+    if (!response.ok) {
+      const err = await response.json()
+      throw new Error(err.detail || 'Failed to load path')
+    }
     
     const result = await response.json()
-    const savedPaths = result.saved_paths as string[]
     
-    // Check if files[0] exists before accessing
-    if (files.length > 0 && savedPaths.length === 1 && files[0]?.name.endsWith('.json')) {
-      // Single JSON file mode
-      const content = await files[0].text()
-      if (selectedInput.value) {
-         updateInputNode(selectedInput.value.id, {
-          inputPath: savedPaths[0],
-          inputMode: 'file',
-          task: content,
-          folderFiles: undefined
-        })
-      }
-      
-    } else if (selectedInput.value) {
-      // Folder/Multi-file mode
-      const jsonFiles = Array.from(files)
-        .filter(f => f && f.name.endsWith('.json'))
-        .map(f => f.name)
-        
+    if (result.mode === 'file') {
+      // Single file mode
       updateInputNode(selectedInput.value.id, {
-        inputPath: result.directory, // Use the session directory
+        inputPath: result.path,
+        inputMode: 'file',
+        task: result.content,
+        folderFiles: undefined
+      })
+    } else {
+      // Folder mode
+      updateInputNode(selectedInput.value.id, {
+        inputPath: result.path,
         inputMode: 'folder',
-        folderFiles: jsonFiles
+        folderFiles: result.files
       })
     }
     
-  } catch (err) {
-    console.error(err)
-    // Show error?
+    pathInput.value = '' // Clear input after success
+    
+  } catch (err: any) {
+    pathError.value = err.message || 'Unknown error'
   } finally {
     isUploading.value = false
   }
 }
+
+
+
+
+
 
 // Check if selected node has simulation results (for agent nodes)
 const nodeResult = computed(() => {
@@ -356,48 +336,23 @@ function toggleTool(tool: ToolDef) {
           Input Source
         </div>
         
-        <!-- Selection Buttons -->
-        <div class="flex gap-2 mb-2">
-          <!-- Hidden Inputs -->
-          <input
-            ref="fileInput"
-            type="file"
-            accept=".json"
-            class="hidden"
-            @change="handleFileUpload"
-          />
-          <input
-            ref="folderInput"
-            type="file"
-            webkitdirectory
-            directory
-            class="hidden"
-            @change="handleFileUpload"
-          />
-
+        <!-- Browse Button -->
+        <div class="mb-3">
           <button
-            @click="selectFile"
+            @click="showFileBrowser = true"
             :disabled="isUploading"
-            class="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-primary-500 transition-colors disabled:opacity-50"
+            class="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-primary-500 transition-colors disabled:opacity-50"
           >
-            <FileText class="w-3.5 h-3.5 text-blue-500" />
-            Upload File
+            <FolderOpen class="w-4 h-4 text-primary-600" />
+            Browse Files...
           </button>
-          <button
-            @click="selectFolder"
-            :disabled="isUploading"
-            class="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-primary-500 transition-colors disabled:opacity-50"
-          >
-            <FolderOpen class="w-3.5 h-3.5 text-green-500" />
-            Upload Folder
-          </button>
+          <div v-if="pathError" class="mt-1 text-xs text-red-500">{{ pathError }}</div>
         </div>
         
         <!-- Selected Path Display -->
-        <div v-if="selectedInput?.inputPath" class="flex items-center gap-1 px-2 py-1.5 bg-gray-50 border border-gray-200 rounded text-xs mb-1">
-          <span class="text-gray-400 font-mono flex-shrink-0">Path:</span>
-          <span class="text-gray-700 truncate flex-1" :title="selectedInput.inputPath">{{ selectedInput.inputPath }}</span>
-          <Loader2 v-if="isUploading" class="w-3 h-3 animate-spin text-primary-500 flex-shrink-0" />
+        <div v-if="selectedInput?.inputPath" class="flex items-center gap-1 px-2 py-1.5 bg-emerald-50 border border-emerald-200 rounded text-xs mb-1">
+          <span class="text-emerald-600 font-medium flex-shrink-0">✓ Loaded:</span>
+          <span class="text-emerald-700 truncate flex-1 font-mono" :title="selectedInput.inputPath">{{ selectedInput.inputPath.split(/[/\\]/).pop() }}</span>
         </div>
       
         <!-- Folder File List Display -->
@@ -469,6 +424,22 @@ function toggleTool(tool: ToolDef) {
           </button>
         </div>
         <div class="flex-1 bg-green-50 border border-green-200 rounded-md p-3 text-xs text-gray-700 whitespace-pre-wrap break-words overflow-y-auto max-h-[400px] font-mono leading-relaxed">{{ outputNodeContent }}</div>
+      </div>
+
+      <!-- Output Files Section -->
+      <div v-if="outputFiles.length > 0" class="border-t border-gray-100 pt-3">
+        <label class="block text-xs font-medium text-gray-500 mb-2">Generated Output Files</label>
+        <div class="space-y-1.5 max-h-[150px] overflow-y-auto">
+          <div 
+            v-for="filePath in outputFiles" 
+            :key="filePath"
+            class="flex items-center gap-2 px-2.5 py-2 bg-emerald-50 border border-emerald-200 rounded-md text-[11px] text-emerald-700"
+            :title="filePath"
+          >
+            <FileText class="w-3.5 h-3.5 flex-shrink-0" />
+            <span class="truncate flex-1">{{ filePath.split(/[/\\]/).pop() }}</span>
+          </div>
+        </div>
       </div>
 
       <!-- No results yet -->
@@ -805,4 +776,12 @@ function toggleTool(tool: ToolDef) {
       </div>
     </div>
   </div>
+  
+  <!-- File Browser Dialog -->
+  <FileBrowser 
+    :isOpen="showFileBrowser" 
+    mode="any"
+    @close="showFileBrowser = false"
+    @select="handleBrowseSelect"
+  />
 </template>
