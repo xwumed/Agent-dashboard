@@ -150,7 +150,8 @@ async function testConnection(configId: string) {
       body: JSON.stringify({
         apiKey: config.apiKey,
         apiEndpoint: config.endpoint,
-        models: config.models
+        models: config.models,
+        category: config.category  // Add category to support different model types
       })
     })
     
@@ -366,6 +367,7 @@ function save() {
                   <div class="flex items-center gap-2">
                     <span v-if="testStatus[config.id] !== 'idle'" class="text-xs" :class="{'text-blue-600': testStatus[config.id] === 'testing', 'text-green-600': testStatus[config.id] === 'success', 'text-red-600': testStatus[config.id] === 'error'}">{{ testMessage[config.id] }}</span>
                     <button @click="fetchModels(config.id)" :disabled="testStatus[config.id] === 'testing'" class="px-2 py-1 text-xs text-green-600 border border-green-200 rounded hover:bg-green-50 disabled:opacity-50">Fetch</button>
+                    <button @click="testConnection(config.id)" :disabled="testStatus[config.id] === 'testing'" class="px-2 py-1 text-xs text-blue-600 border border-blue-200 rounded hover:bg-blue-50 disabled:opacity-50">Test</button>
                   </div>
                 </div>
                 <div class="mb-3">
@@ -441,6 +443,7 @@ function save() {
                   <div class="flex items-center gap-2">
                     <span v-if="testStatus[config.id] !== 'idle'" class="text-xs" :class="{'text-blue-600': testStatus[config.id] === 'testing', 'text-green-600': testStatus[config.id] === 'success', 'text-red-600': testStatus[config.id] === 'error'}">{{ testMessage[config.id] }}</span>
                     <button @click="fetchModels(config.id)" :disabled="testStatus[config.id] === 'testing'" class="px-2 py-1 text-xs text-green-600 border border-green-200 rounded hover:bg-green-50 disabled:opacity-50">Fetch</button>
+                    <button @click="testConnection(config.id)" :disabled="testStatus[config.id] === 'testing'" class="px-2 py-1 text-xs text-blue-600 border border-blue-200 rounded hover:bg-blue-50 disabled:opacity-50">Test</button>
                   </div>
                 </div>
                 <div class="mb-3">

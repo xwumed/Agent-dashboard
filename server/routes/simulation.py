@@ -128,7 +128,7 @@ async def test_connection(request: dict):
     """
     POST /api/test-connection
     Test if the API connection is working with the provided credentials.
-    Can test a single model or multiple models.
+    Can test chat, embedding, or reranker models.
     """
     from openai import AsyncOpenAI
     import asyncio
@@ -137,6 +137,7 @@ async def test_connection(request: dict):
     api_endpoint = request.get("apiEndpoint")
     models = request.get("models", [])  # List of models to test
     model = request.get("model")  # Single model (backward compatible)
+    category = request.get("category", "chat")  # Model category: chat, embedding, reranker
     
     if not api_key:
         raise HTTPException(status_code=400, detail="API key is required")
@@ -159,8 +160,8 @@ async def test_connection(request: dict):
     
     client = AsyncOpenAI(**client_kwargs)
     
-    async def test_single_model(model_name: str) -> dict:
-        """Test a single model and return result"""
+    async def test_chat_model(model_name: str) -> dict:
+        """Test a chat model"""
         try:
             response = await client.chat.completions.create(
                 model=model_name,
@@ -180,8 +181,92 @@ async def test_connection(request: dict):
                 "error": str(e)
             }
     
+    async def test_embedding_model(model_name: str) -> dict:
+        """Test an embedding model"""
+        try:
+            response = await client.embeddings.create(
+                model=model_name,
+                input="Test embedding connectivity"
+            )
+            # Check if we got embeddings
+            if response.data and len(response.data) > 0:
+                embedding_dim = len(response.data[0].embedding)
+                return {
+                    "model": model_name,
+                    "success": True,
+                    "response": f"Embedding dimension: {embedding_dim}"
+                }
+            else:
+                return {
+                    "model": model_name,
+                    "success": False,
+                    "error": "No embedding data returned"
+                }
+        except Exception as e:
+            return {
+                "model": model_name,
+                "success": False,
+                "error": str(e)
+            }
+    
+    async def test_reranker_model(model_name: str) -> dict:
+        """Test a reranker model"""
+        try:
+            # Try OpenAI-compatible reranker endpoint
+            # Some reranker APIs use a custom endpoint structure
+            import httpx
+            
+            # Build the rerank endpoint URL
+            base_url = client_kwargs.get("base_url", "https://api.openai.com/v1")
+            rerank_url = f"{base_url.rstrip('/v1')}/v1/rerank"
+            
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            payload = {
+                "model": model_name,
+                "query": "Test query",
+                "documents": [
+                    "This is a test document",
+                    "Another test document"
+                ]
+            }
+            
+            async with httpx.AsyncClient(timeout=30.0) as http_client:
+                response = await http_client.post(rerank_url, json=payload, headers=headers)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    return {
+                        "model": model_name,
+                        "success": True,
+                        "response": f"Reranked {len(data.get('results', []))} documents"
+                    }
+                else:
+                    return {
+                        "model": model_name,
+                        "success": False,
+                        "error": f"HTTP {response.status_code}: {response.text[:100]}"
+                    }
+        except Exception as e:
+            return {
+                "model": model_name,
+                "success": False,
+                "error": str(e)
+            }
+    
+    # Choose test function based on category
+    if category == "embedding":
+        test_func = test_embedding_model
+    elif category == "reranker":
+        test_func = test_reranker_model
+    else:  # default to chat
+        test_func = test_chat_model
+    
     # Test all models concurrently
-    results = await asyncio.gather(*[test_single_model(m) for m in models])
+    results = await asyncio.gather(*[test_func(m) for m in models])
     
     # Summary
     successful = [r for r in results if r["success"]]
