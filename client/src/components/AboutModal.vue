@@ -61,7 +61,7 @@ defineEmits<{
             <p class="text-xs text-gray-600 leading-relaxed">
               A visual multi-agent orchestration sandbox for constructing, configuring,
               and executing networks of AI agents. Designed for exploring agent collaboration,
-              adversarial testing, and multi-agent system dynamics in pharmaceutical R&D contexts.
+              adversarial testing, and multi-agent system dynamics in clinical oncology contexts.
             </p>
           </div>
 

@@ -1,109 +1,84 @@
-# <img src="client/public/cosmos_logo.jpeg" width="60" align="center" alt="COSMOS Logo" /> COSMOS: Clinical Oncology Scalable Multi-agent Orchestration System
+# COSMOS: Clinical Oncology Scalable Multi-agent Orchestration System
 
-**v2.0 (Python Backend)**
+<img src="client/public/cosmos_logo.jpeg" width="180px" align="right" style="border-radius: 12px; margin-left: 20px;">
 
-**COSMOS** is a state-of-the-art, visual multi-agent orchestration platform designed to streamline the construction, configuration, and execution of complex AI agent networks. Built with a focus on pharmaceutical R&D but adaptable to any domain, COSMOS empowers researchers to model intricate decision-making processes using a flexible graph-based interface.
+*An efficient, visual multi-agent orchestration platform for clinical oncology and precision medicine.*
 
-This version leverages a high-performance **Python/FastAPI backend** to support asynchronous agent execution, batch processing, and seamless integration with the broader Python AI ecosystem.
+**COSMOS** is a state-of-the-art **visual multi-agent orchestration platform** designed to streamline the construction, configuration, and execution of complex AI agent networks. Built with a focus on clinical oncology but adaptable to any domain, COSMOS empowers researchers to model intricate decision-making processes using a flexible graph-based interface.
 
-## 🚀 Key Features
+Backed by a high-performance **Python/FastAPI backend**, it supports asynchronous agent execution, batch processing, and seamless integration with the broader Python AI ecosystem.
 
-### 🧠 Visual Agent Orchestration
-- **Graph-Based Editor**: Design complex workflows using an intuitive node-and-edge interface (powered by Vue Flow).
-- **Flexible Topologies**: Create linear chains, hierarchical trees, or complex cyclic networks.
-- **Rich Interaction Types**: Define how agents communicate (`Informs`, `Critiques`, `Validates`, `Collaborates`, `Reports To`).
+**Want to start now?** [Jump to Installation](#installation) or [walk through our Getting Started guide](#getting-started).
 
-### 📦 Comprehensive Template Management
-- **Library System**: Save and load complete experimental setups from a persistent local library.
-- **Metadata Tracking**: Automatically tracks agent count, model usage, and input types for every template.
-- **Portable Experiments**: Import and export templates as JSON files to share with colleagues or version control.
-- **State Persistence**: Global settings (Model, Temperature, Thinking Mode) are saved within templates, ensuring reproducibility.
+---
 
-### ⚡ Batch Processing & Input Handling
-- **Batch Execution**: Run simulations across multiple input files simultaneously.
-- **File & Folder Support**: Drag-and-drop support for individual text files or entire folders as input sources.
-- **Persistent Outputs**: Simulation results are automatically saved as `.output` files alongside the source inputs, maintaining a clean audit trail.
+## **Why choose COSMOS?**
 
-### 🤖 Advanced Agent Configuration
-- **Behavior Presets**: Quickly configure agents as `Analytical`, `Creative`, `Adversarial`, or `Balanced`.
-- **Rogue Mode**: inject controlled failures (Hallucinations, Omissions, Contradictions) to stress-test your network's robustness.
-- **Skills & Tools**: Equip agents with specialized capabilities (e.g., RAG tools, Web Search).
-- **Oversight Roles**: Designate senior agents with "Suspicious" or "Trusting" oversight protocols.
+* 🚀 **Scalable & Visual**: Design complex workflows using an intuitive graph-based editor (Vue Flow) and execute them via a robust async backend.  
+* 🧠 **Agentic Intelligence**: Configure agents with specific presets (Analytical, Creative) and built-in "Rogue Modes" (Hallucination, Omission) to stress-test your network's robustness.  
+* 📦 **Reproducible**: Save complete experimental setups (including global settings like Temperature/Model) as templates; persistent `.output` files ensure a clean audit trail.
+* 🔬 **Clinical Focus**: Specialized for **Tumor Board Simulation** and biomarker discovery pipelines, bridging the gap between clinical expertise and AI orchestration.  
+* ⚡ **Batch Processing**: Run validations across entire folders of patient cases simultaneously with drag-and-drop ease.  
+* 🔗 **Modern Stack**: Built on **Vue 3 + TypeScript** for a reactive UI and **FastAPI + Pydantic** for a type-safe, high-performance backend.  
 
-## 🛠️ Technology Stack
+## **Real-World Examples of COSMOS in Action**
+
+- **Precision Oncology Tumor Board:** Simulates a multidisciplinary team (Oncologist, Pathologist, Radiologist) debating treatment options for complex patient cases. COSMOS manages the "Informs", "Critiques", and "Decides" relationships to synthesize a consensus recommendation.
+
+- **Clinical Oncology Pipelines:** Orchestrates multi-step decision workflows where agents formulate hypotheses, retrieve literature (RAG), and critique treatment plans in a loop.
+
+## **Technology Stack**
 
 | Component | Technology | Description |
 |-----------|------------|-------------|
 | **Frontend** | **Vue 3** | Reactive, component-based UI framework. |
 | | **TypeScript** | Ensures type safety and code reliability. |
 | | **Vue Flow** | Powerful library for interactive graph visualization. |
-| | **Tailwind CSS** | Utility-first styling for a modern, responsive design. |
 | **Backend** | **Python 3.11+** | Core runtime environment. |
 | | **FastAPI** | Modern, high-performance async web framework. |
-| | **Pydantic** | Robust data validation and settings management. |
 | | **OpenAI SDK** | Standardized interface for LLM calls (supports OpenAI, LocalAI, vLLM). |
 
-## 📂 Project Structure
-
-```bash
-agentdashboardpy/
-├── client/                      # Vue 3 Frontend
-│   ├── src/
-│   │   ├── components/          # UI Components (Canvas, Panels, Nodes)
-│   │   ├── composables/         # Shared Logic (State Management)
-│   │   ├── scenarios/           # Pre-built Medical R&D Scenarios
-│   │   └── types/               # TypeScript Definitions
-│   └── ...
-├── server/                      # Python FastAPI Backend
-│   ├── routes/                  # API Endpoints
-│   │   ├── templates.py         # Template CRUD Operations
-│   │   └── simulation.py        # Execution Triggers
-│   ├── services/                # Business Logic
-│   │   ├── orchestrator.py      # Async Graph Execution Engine
-│   │   ├── batch_processor.py   # Bulk File Processing
-│   │   └── template_store.py    # File-Based Persistence
-│   ├── data/                    # Local Storage
-│   │   └── templates/           # Saved JSON Templates
-│   └── ...
-└── README.md
-```
-
-## 🚦 Getting Started
+## Installation
 
 ### Prerequisites
 - **Python** 3.11+
 - **Node.js** 18+ & **npm** 9+
 - **OpenAI API Key** (or compatible local endpoint)
 
-### Installation
+### 1. Clone the Repository
 
-1.  **Clone the repository**
-    ```bash
-    git clone https://github.com/KatherLab/agentdashboardpy.git
-    cd agentdashboardpy
-    ```
+```bash
+git clone https://github.com/KatherLab/agentdashboardpy.git
+cd agentdashboardpy
+```
 
-2.  **Backend Setup**
-    ```bash
-    python -m venv venv
-    source venv/bin/activate  # Windows: venv\Scripts\activate
-    pip install -r server/requirements.txt
-    ```
+### 2. Backend Setup
 
-3.  **Frontend Setup**
-    ```bash
-    cd client
-    npm install
-    cd ..
-    ```
+```bash
+python -m venv venv
+# Windows
+venv\Scripts\activate
+# Mac/Linux
+source venv/bin/activate
 
-### Running the Application
+pip install -r server/requirements.txt
+```
 
-Open two terminal windows:
+### 3. Frontend Setup
+
+```bash
+cd client
+npm install
+cd ..
+```
+
+## Basic Usage
+
+To run COSMOS, you will need two terminal windows open.
 
 **Terminal 1: Backend**
 ```bash
-source venv/bin/activate
+# Ensure venv is active
 uvicorn server.main:app --reload --port 8000
 # Swagger UI available at http://localhost:8000/docs
 ```
@@ -115,18 +90,21 @@ npm run dev
 # Dashboard accessible at http://localhost:5173
 ```
 
-## 🔌 API Reference
+## Reference
 
-### Simulation
-- `POST /api/simulate`: Trigger a single simulation run. Returns a streaming response (NDJSON).
+If you find our work useful in your research, please consider citing:
 
-### Templates
-- `GET /api/templates`: List all templates with summary metadata.
-- `GET /api/templates/{id}`: Retrieve full topology for a specific template.
-- `POST /api/templates`: Save or update a template.
-- `DELETE /api/templates/{id}`: Delete a template.
+```
+@Misc{COSMOS2026,
+  author={Wu, Xuewei and Kather, Jakob Nikolas},
+  title={COSMOS: Clinical Oncology Scalable Multi-agent Orchestration System},
+  year={2026},
+  publisher={Kather Lab},
+  url={https://github.com/KatherLab/agentdashboardpy}
+}
+```
 
-## 📄 License
+## License
 
 MIT License - see [LICENSE](LICENSE) for details.
 
