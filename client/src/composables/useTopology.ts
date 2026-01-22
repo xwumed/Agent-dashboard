@@ -25,19 +25,33 @@ interface EndpointConfig {
 
 const defaultEndpointConfigs: EndpointConfig[] = [
   // Chat Models (for Agent conversation)
-  { id: 'chat-openai', category: 'chat', label: 'OpenAI Chat', apiKey: '', endpoint: 'https://api.openai.com/v1', models: ['gpt-4o'] },
+  { id: 'chat-openai', category: 'chat', label: 'Cloud LLM', apiKey: '', endpoint: 'https://api.openai.com/v1', models: ['gpt-4o'] },
   { id: 'chat-local', category: 'chat', label: 'Local LLM', apiKey: 'EMPTY', endpoint: 'http://localhost:11434/v1', models: ['GPT-OSS-120B', 'GLM-4.7-FP8'] },
   // Embedding Models (for RAG retrieval)
-  { id: 'embedding', category: 'embedding', label: 'Embedding', apiKey: 'EMPTY', endpoint: 'http://localhost:8080/v1', models: ['Qwen3-Embedding-8B'] },
+  { id: 'embedding', category: 'embedding', label: 'Embedding Model', apiKey: 'EMPTY', endpoint: 'http://localhost:8080/v1', models: ['Qwen3-Embedding-8B'] },
   // Reranker Models (for RAG reranking)
-  { id: 'reranker', category: 'reranker', label: 'Reranker', apiKey: 'EMPTY', endpoint: 'http://localhost:8080/v1', models: ['bge-reranker-large'] }
+  { id: 'reranker', category: 'reranker', label: 'Reranker Model', apiKey: 'EMPTY', endpoint: 'http://localhost:8080/v1', models: ['bge-reranker-large'] }
 ]
 
 // Load from localStorage or use defaults
+// Load from localStorage or use defaults
 const savedConfigs = localStorage.getItem('endpoint_configs')
-const endpointConfigs = ref<EndpointConfig[]>(
-  savedConfigs ? JSON.parse(savedConfigs) : defaultEndpointConfigs
-)
+let initialConfigs: EndpointConfig[] = defaultEndpointConfigs
+
+if (savedConfigs) {
+  try {
+    const parsed = JSON.parse(savedConfigs) as EndpointConfig[]
+    // Migration: Update labels to match new defaults while keeping user values
+    initialConfigs = parsed.map(config => {
+      const defaultConfig = defaultEndpointConfigs.find(d => d.id === config.id)
+      return defaultConfig ? { ...config, label: defaultConfig.label } : config
+    })
+  } catch (e) {
+    console.error('Failed to parse saved endpoint configs', e)
+  }
+}
+
+const endpointConfigs = ref<EndpointConfig[]>(initialConfigs)
 
 // Legacy single endpoint (for backward compatibility)
 const apiKey = ref(localStorage.getItem('openai_api_key') || '')

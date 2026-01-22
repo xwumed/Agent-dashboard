@@ -229,22 +229,9 @@ async def list_models(request: dict):
         # Extract model IDs
         all_model_ids = [model.id for model in models_response.data]
         
-        # Filter for chat models only (for OpenAI endpoints)
-        # Only keep gpt-* models, filter out embeddings, whisper, dall-e, tts, etc.
-        exclude_keywords = ('embedding', 'whisper', 'dall-e', 'tts', 'realtime', 'audio')
-        
-        # Check if this looks like an OpenAI endpoint (not local)
-        is_openai = 'openai.com' in api_endpoint or 'azure' in api_endpoint
-        
-        if is_openai:
-            model_ids = [
-                m for m in all_model_ids
-                if m.lower().startswith('gpt-')
-                and not any(kw in m.lower() for kw in exclude_keywords)
-            ]
-        else:
-            # For local LLMs, return all models
-            model_ids = all_model_ids
+        # Return all models regardless of endpoint type
+        # Users can filter manually if needed, or we can trust them to know what they want
+        model_ids = all_model_ids
         
         return {
             "success": True,

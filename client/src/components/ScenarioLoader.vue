@@ -288,7 +288,7 @@ defineExpose({ open })
                   <span class="truncate">{{ template.model_summary }}</span>
                 </div>
                 <!-- Inputs -->
-                <div v-if="template.input_summary" class="flex items-center gap-1 bg-green-50 px-1.5 py-0.5 rounded text-[10px] text-green-700 truncate max-w-[80px]" title="Inputs">
+                <div v-if="template.input_summary" class="flex items-center gap-1 bg-green-50 px-1.5 py-0.5 rounded text-[10px] text-green-700 truncate max-w-[250px]" title="Inputs">
                   <FileUp class="w-3 h-3 opacity-70" />
                   <span class="truncate">{{ template.input_summary }}</span>
                 </div>

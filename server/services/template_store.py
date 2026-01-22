@@ -108,14 +108,31 @@ class TemplateStore:
         if input_count == 0:
             input_summary = "No Inputs"
         elif input_count == 1:
-            input_summary = "1 Input"
+            # Smart label for single input
+            node = input_nodes[0]
+            # Handle both camelCase and snake_case keys
+            mode = node.get("inputMode") or node.get("input_mode") or "text"
+            path = node.get("inputPath") or node.get("input_path")
+            
+            if mode == "folder" and path:
+                folder_name = Path(path).name
+                input_summary = f"Folder: {folder_name}"
+            elif mode == "file" and path:
+                file_name = Path(path).name
+                input_summary = f"File: {file_name}"
+            else:
+                input_summary = "Text Input"
         else:
-            input_summary = f"{input_count} Inputs"
-        
-        # Refine input summary if possible (e.g. check for files)
-        file_inputs = [n for n in input_nodes if n.get("inputType") == "file" or n.get("filepath")]
-        if file_inputs:
-            input_summary += f" ({len(file_inputs)} Files)"
+            # Summary for multiple inputs
+            folders = [n for n in input_nodes if (n.get("inputMode") == "folder" or n.get("input_mode") == "folder")]
+            files = [n for n in input_nodes if (n.get("inputMode") == "file" or n.get("input_mode") == "file")]
+            
+            if len(folders) == input_count:
+                input_summary = f"{input_count} Folders"
+            elif len(files) == input_count:
+                input_summary = f"{input_count} Files"
+            else:
+                input_summary = f"{input_count} Mixed Inputs"
 
         template = Template(
             id=template_id,
