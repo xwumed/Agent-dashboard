@@ -1,8 +1,8 @@
-# <img src="client/public/seed_logo.jpeg" width="60" align="center" alt="SEED Logo" /> SEED: Scalable and Evaluation-Driven Multi-Agent Framework
+# <img src="client/public/cosmos_logo.jpeg" width="60" align="center" alt="COSMOS Logo" /> COSMOS: Clinical Oncology Scalable Multi-agent Orchestration System
 
 **v2.0 (Python Backend)**
 
-**SEED** is a state-of-the-art, visual multi-agent orchestration platform designed to streamline the construction, configuration, and execution of complex AI agent networks. Built with a focus on pharmaceutical R&D but adaptable to any domain, SEED empowers researchers to model intricate decision-making processes using a flexible graph-based interface.
+**COSMOS** is a state-of-the-art, visual multi-agent orchestration platform designed to streamline the construction, configuration, and execution of complex AI agent networks. Built with a focus on pharmaceutical R&D but adaptable to any domain, COSMOS empowers researchers to model intricate decision-making processes using a flexible graph-based interface.
 
 This version leverages a high-performance **Python/FastAPI backend** to support asynchronous agent execution, batch processing, and seamless integration with the broader Python AI ecosystem.
 
