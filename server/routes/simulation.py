@@ -59,6 +59,50 @@ async def simulate(request: SimulationRequest):
             logger.error(f"Stream error: {e}")
             yield json.dumps({"type": "error", "error": str(e)}) + "\n"
 
+    # Handle non-streaming request
+    if request.stream is False:
+        logger.info(f"Running synchronous simulation for topology: {request.topology.name}")
+        final_result = None
+        error_msg = None
+        
+        try:
+            async for event in execute_simulation_stream(
+                request.topology,
+                request.api_key,
+                request.api_endpoint,
+                request.global_model,
+                request.global_temperature,
+                request.global_max_tokens,
+                request.global_reasoning_effort,
+                request.global_thinking,
+                request.endpoint_configs
+            ):
+                if event["type"] == "complete":
+                    # Format as SimulationResponse (success=True)
+                    final_result = {
+                        "success": True,
+                        "results": event["results"],
+                        "executionOrder": event["executionOrder"],
+                        "masterTask": event.get("masterTask"),
+                        "outputFiles": event.get("outputFiles", []),
+                        "debugLogs": event.get("debugLogs", [])
+                    }
+                elif event["type"] == "error":
+                     error_msg = event.get("error", "Unknown error")
+            
+            if final_result:
+                return final_result
+            else:
+                return {
+                    "success": False, 
+                    "error": error_msg or "Simulation finished without valid result",
+                    "results": {}
+                }
+                
+        except Exception as e:
+            logger.error(f"Sync simulation error: {e}")
+            return {"success": False, "error": str(e), "results": {}}
+
     return StreamingResponse(
         event_generator(),
         media_type="application/x-ndjson",

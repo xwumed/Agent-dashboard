@@ -17,6 +17,9 @@ interface BatchRun {
   error?: string
   startTime?: number
   endTime?: number
+  totalFiles?: number
+  processedFiles?: number
+  currentFile?: string
 }
 
 interface BatchResults {
@@ -154,9 +157,12 @@ export function useBatchProcessing() {
     apiEndpoint?: string,
     globalModel?: string,
     globalTemperature?: number,
-    globalBehaviorPreset?: string
+    globalBehaviorPreset?: string,
+    endpointConfigs?: any[]
   ): Promise<boolean> {
+    console.log('[Batch] Starting runBatch. Selected:', selectedScenarios.value.length)
     if (!apiKey) {
+      console.error('[Batch] No API Key')
       return false
     }
 
@@ -168,7 +174,9 @@ export function useBatchProcessing() {
     batchRuns.value = selectedScenarios.value.map(s => ({
       scenarioId: s.id,
       scenarioName: s.name,
-      status: 'pending' as const
+      status: 'pending' as const,
+      totalFiles: 0,
+      processedFiles: 0
     }))
 
     isRunning.value = true
@@ -189,33 +197,152 @@ export function useBatchProcessing() {
 
       run.status = 'running'
       run.startTime = Date.now()
+      run.results = {}
 
       try {
-        const response = await fetch('/api/simulate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            topology: scenario.topology,
-            apiKey,
-            apiEndpoint,
-            globalModel,
-            globalTemperature,
-            globalBehaviorPreset
-          })
-        })
+        // Check for folder inputs
+        const topology = scenario.topology
+        console.log('[Batch] Checking topology:', scenario.name)
+        let workItems: Array<{ path?: string, nodeId?: string }> = []
 
-        const data: SimulationResponse = await response.json()
+        // Find folder nodes
+        // Note: Check both snake_case and camelCase just in case of inconsistency
+        const folderNodes = (topology.inputNodes || []).filter((n: any) =>
+          (n.inputMode === 'folder' || n.input_mode === 'folder') &&
+          (n.inputPath || n.input_path)
+        )
+
+        if (folderNodes.length > 0) {
+          console.log('[Batch] Found folder nodes:', folderNodes.length)
+          // Batch Mode: Iterate files
+          // Use the first folder node as driver
+          const driverNode = folderNodes[0]!
+          const path = (driverNode as any).inputPath || (driverNode as any).input_path
+          const nodeId = driverNode.id
+
+          console.log('[Batch] Fetching files from:', path)
+          // Fetch file list
+          const browseRes = await fetch('/api/browse', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path })
+          })
+
+          if (browseRes.ok) {
+            const data = await browseRes.json()
+            // Filter JSON files
+            const jsonFiles = data.items.filter((item: any) => !item.is_dir && item.name.toLowerCase().endsWith('.json'))
+
+            console.log('[Batch] JSON files found:', jsonFiles.length)
+            if (jsonFiles.length === 0) {
+              console.warn(`[Batch] No JSON files in ${path}`)
+              throw new Error(`No JSON files found in ${path}`)
+            }
+
+            workItems = jsonFiles.map((item: any) => ({ path: item.path, nodeId }))
+          } else {
+            console.error('[Batch] Browse failed:', browseRes.status)
+            throw new Error(`Failed to list files in ${path}`)
+          }
+        } else {
+          console.log('[Batch] Running single pass (Text/Single File)')
+          // Standard Mode: Single run
+          workItems.push({})
+        }
+
+        run.totalFiles = workItems.length
+        run.processedFiles = 0
+
+        if (workItems.length === 0) {
+          run.status = 'failed'
+          run.error = 'No files to process'
+          run.endTime = Date.now()
+          continue
+        }
+
+        // Iterate work items
+        for (const item of workItems) {
+          if (shouldCancel.value) break
+
+          // Update status per file
+          if (item.path) {
+            run.currentFile = item.path.split(/[/\\]/).pop()
+            console.log('[Batch] Processing:', run.currentFile)
+          }
+
+          // prepare topology clone
+          const currentTopology = JSON.parse(JSON.stringify(topology))
+
+          // Override input if needed
+          if (item.path && item.nodeId) {
+            const node = (currentTopology.inputNodes || []).find((n: any) => n.id === item.nodeId)
+            if (node) {
+              console.log('[Batch] Overriding input node:', node.id, item.path)
+              // Set to file mode so backend processes it as single file
+              // Note: We depend on backend orchestrator supporting 'file' mode auto-loading
+              node.inputMode = 'file'
+              node.input_mode = 'file'
+              node.inputPath = item.path
+              node.input_path = item.path
+            }
+          }
+
+          console.log('[Batch] Sending simulate request...')
+          const response = await fetch('/api/simulate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              topology: currentTopology,
+              apiKey,
+              apiEndpoint,
+              globalModel,
+              globalTemperature,
+              globalBehaviorPreset,
+              endpointConfigs,
+              stream: false // Sync mode
+            })
+          })
+
+          console.log('[Batch] Response status:', response.status)
+
+          if (!response.ok) {
+            // Log but continue?
+            console.error(`HTTP error ${response.status} for ${run.currentFile || 'template'}`)
+            // Store error?
+            run.error = `Partially failed: ${response.status}`
+          } else {
+            const data: SimulationResponse = await response.json()
+            if (data.success) {
+              // LOG SERVER DEBUG LOGS
+              if ((data as any).debugLogs) {
+                console.log('[Batch] Server Debug Logs:\n', ((data as any).debugLogs || []).join('\n'))
+              } else {
+                console.log('[Batch] No Server Debug Logs returned')
+              }
+
+              console.log('[Batch] Success result keys:', Object.keys(data.results || {}))
+              // Merge results
+              run.results = { ...run.results, ...data.results }
+            } else {
+              console.error(`Error processing ${run.currentFile}:`, data.error)
+              run.error = data.error || 'Partial error'
+            }
+          }
+
+          run.processedFiles++
+        }
 
         run.endTime = Date.now()
-
-        if (data.success) {
+        run.status = run.error ? 'failed' : 'completed' // Or completed with warnings?
+        // If we processed at least some files and got results, maybe consider completed?
+        if (run.processedFiles > 0 && run.results && Object.keys(run.results).length > 0) {
           run.status = 'completed'
-          run.results = data.results
-        } else {
-          run.status = 'failed'
-          run.error = data.error || 'Unknown error'
         }
+
+        run.currentFile = undefined
+
       } catch (err) {
+        console.error('[Batch] Run error:', err)
         run.endTime = Date.now()
         run.status = 'failed'
         run.error = err instanceof Error ? err.message : 'Network error'

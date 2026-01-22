@@ -182,10 +182,12 @@ async def execute_simulation_stream(
 
     # Helper to get client for a specific model
     def get_client_for_model(model_name: str) -> AsyncOpenAI:
+        print(f"DEBUG: get_client_for_model called for {model_name}", flush=True)
         # 1. Try to find model in endpoint configs
         if endpoint_configs:
             for config in endpoint_configs:
                 if model_name in config.models:
+                    print(f"DEBUG: Using endpoint config for {model_name}", flush=True)
                     return AsyncOpenAI(
                         api_key=config.api_key,
                         base_url=config.endpoint
@@ -193,6 +195,9 @@ async def execute_simulation_stream(
         
         # 2. Fallback to default provided API key/endpoint
         # If the endpoint is specific to OpenAI, use it. Otherwise assume it acts as a fallback.
+        key_masked = f"{api_key[:8]}..." if api_key else "None"
+        print(f"DEBUG: Using fallback client with key: {key_masked}", flush=True)
+
         if api_endpoint and "openai.com" not in api_endpoint:
             return AsyncOpenAI(
                 api_key=api_key,
@@ -231,16 +236,35 @@ async def execute_simulation_stream(
             
     if not execution_queue:
         # Default single run (Text mode or Single File mode)
-        # We assume n.task is already set for text mode, or file content loaded for file mode
-        execution_queue.append((None, {}))
+        overrides = {}
+        # Pre-load file content if needed (for file mode where task might be empty)
+        for n in input_nodes:
+            if n.input_mode == 'file' and n.input_path:
+                try:
+                    p = Path(n.input_path)
+                    if p.exists() and p.is_file():
+                         with open(p, "r", encoding="utf-8") as f:
+                             overrides[n.id] = f.read()
+                except Exception as e:
+                    import logging
+                    logging.getLogger(__name__).error(f"Failed to read input file {n.input_path}: {e}")
+
+        execution_queue.append((None, overrides))
 
     accumulated_output_files = []
     final_pass_results = {}
     final_pass_phases = []
     final_pass_master_task = ""
+    debug_logs = []  # Capture logs for frontend debugging
 
     # Iterate through execution queue
     for current_file, task_overrides in execution_queue:
+        import logging
+        # Force print for debugging visibility
+        msg = f"DEBUG: Processing Pass. File: {current_file}, Override Count: {len(task_overrides)}"
+        print(msg, flush=True)
+        debug_logs.append(msg)
+        
         # Apply task overrides
         for nid, content in task_overrides.items():
             for n in input_nodes:
@@ -253,7 +277,9 @@ async def execute_simulation_stream(
             n.task.strip() for n in input_nodes if n.task and n.task.strip()
         )
         final_pass_master_task = master_task
-
+        msg = f"DEBUG: Master task length: {len(master_task)}"
+        print(msg, flush=True)
+        debug_logs.append(msg)
         # Find which agent nodes are connected to input nodes
         input_node_ids = {n.id for n in input_nodes}
         input_connected_node_ids = {
@@ -267,14 +293,19 @@ async def execute_simulation_stream(
         # Store outputs
         results: dict[str, SimulationResult] = {}
         final_pass_results = results
+        
+        print(f"DEBUG: Topological sort phases: {len(phases)}", flush=True)
 
         # Execute each phase
         for phase_index, phase in enumerate(phases):
+            print(f"DEBUG: Executing phase {phase_index} with nodes: {phase}", flush=True)
             # Emit phase start event
             yield {"type": "phase-start", "phase": phase_index, "nodeIds": phase}
 
             # Run all nodes in this phase in parallel
             async def execute_node(node_id: str) -> dict:
+                debug_logs.append(f"DEBUG: Executing node {node_id}")
+                start_time = time.time()
                 node = next((n for n in nodes if n.id == node_id), None)
                 if not node:
                     return {"nodeId": node_id, "result": None, "error": None}
@@ -459,6 +490,8 @@ async def execute_simulation_stream(
                     return {"nodeId": node_id, "result": result, "error": None}
 
                 except Exception as e:
+                    err_msg = f"Error executing node {node_id}: {e}"
+                    debug_logs.append(err_msg)
                     import logging
                     logger = logging.getLogger(__name__)
                     logger.error(f"Error executing node {node_id}: {e}")
@@ -507,7 +540,8 @@ async def execute_simulation_stream(
         "results": {k: v.model_dump(by_alias=True) for k, v in final_pass_results.items()},
         "executionOrder": final_pass_phases,
         "masterTask": final_pass_master_task or None,
-        "outputFiles": accumulated_output_files
+        "outputFiles": accumulated_output_files,
+        "debugLogs": debug_logs
     }
 
 

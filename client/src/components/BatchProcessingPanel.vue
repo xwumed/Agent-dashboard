@@ -17,7 +17,7 @@ import { useTopology } from '../composables/useTopology'
 import { scenarios } from '../scenarios'
 import type { ScenarioCategory } from '../types'
 
-const { apiKey, apiEndpoint, globalModel, globalTemperature } = useTopology()
+const { apiKey, apiEndpoint, globalModel, globalTemperature, endpointConfigs } = useTopology()
 const {
   batchRuns,
   isRunning,
@@ -148,7 +148,9 @@ async function handleRunBatch() {
     apiKey.value,
     apiEndpoint.value,
     globalModel.value,
-    globalTemperature.value
+    globalTemperature.value,
+    undefined, // globalBehaviorPreset
+    endpointConfigs.value
   )
 }
 
@@ -185,8 +187,16 @@ function getRunStatus(scenarioId: string) {
       <!-- Progress bar (during execution) -->
       <div v-if="isRunning" class="space-y-1">
         <div class="flex items-center justify-between text-[10px]">
-          <span class="text-gray-500 truncate flex-1">{{ currentScenario?.scenarioName }}</span>
-          <span class="text-gray-400">{{ progress }}%</span>
+          <div class="flex flex-col flex-1 min-w-0 mr-2">
+            <span class="text-gray-500 truncate font-medium">{{ currentScenario?.scenarioName }}</span>
+            <span v-if="currentScenario?.currentFile" class="text-gray-400 truncate text-[9px]">{{ currentScenario.currentFile }}</span>
+          </div>
+          <div class="text-right">
+            <div class="text-gray-400 font-medium">{{ progress }}%</div>
+            <div v-if="currentScenario?.totalFiles && currentScenario.totalFiles > 1" class="text-[9px] text-gray-400">
+              {{ currentScenario.processedFiles }}/{{ currentScenario.totalFiles }}
+            </div>
+          </div>
         </div>
         <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden">
           <div

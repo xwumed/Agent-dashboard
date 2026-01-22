@@ -118,6 +118,7 @@ class SimulationRequest(BaseModel):
     global_reasoning_effort: Optional[str] = Field("medium", alias="globalReasoningEffort")
     global_thinking: Optional[bool] = Field(False, alias="globalThinking")
     endpoint_configs: Optional[list[EndpointConfig]] = Field(None, alias="endpointConfigs")
+    stream: Optional[bool] = Field(True, alias="stream")
 
     class Config:
         populate_by_name = True
